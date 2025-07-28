@@ -1,0 +1,8 @@
+# Dependencias
+node_modules
+
+# Archivo de entorno (¡MUY IMPORTANTE!)
+.env
+
+# Logs
+*.log
