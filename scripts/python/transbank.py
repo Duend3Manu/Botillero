@@ -2,53 +2,75 @@
 import sys
 import requests
 from bs4 import BeautifulSoup
+import io
 
-# Establecer la codificación de la salida estándar
-sys.stdout.reconfigure(encoding='utf-8')
+# Forma más compatible de asegurar la codificación de la salida a UTF-8
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # Constantes
 URL_TRANSBANK = 'https://status.transbankdevelopers.cl/'
 EMOJIS = {
-    "Operational": "✅",  # tick verde
-    "No disponible": "❌",  # x roja
-    "Degradado": "⚠️"  # signo de exclamación amarillo
+    "Operational": "✅",
+    "Degraded Performance": "⚠️",
+    "Partial Outage": "❌",
+    "Major Outage": "🚨",
+    # Añadimos más estados posibles para ser más robustos
 }
 
 def obtener_estado_transbank():
-    """Obtiene el estado de los servicios de Transbank desde la web."""
+    """Obtiene y procesa el estado de los servicios de Transbank."""
     try:
-        response = requests.get(URL_TRANSBANK)
-        response.raise_for_status()  # Lanza una excepción para códigos de estado 4xx/5xx
-
+        response = requests.get(URL_TRANSBANK, timeout=10) # Añadimos un timeout
+        response.raise_for_status()
+        
         soup = BeautifulSoup(response.text, 'html.parser')
-        servicios = soup.find_all('div', class_='component-inner-container')
+        
+        # Un selector más específico para evitar elementos no deseados
+        servicios_container = soup.find('div', class_='components-container')
+        
+        # Si el contenedor principal no existe, la página cambió o está rota
+        if not servicios_container:
+            print("No se pudo encontrar el contenedor de servicios en la página. La estructura puede haber cambiado.")
+            return None
 
-        # Extraer nombre y estado de cada servicio en un diccionario
-        return {
-            servicio.find('span', class_='name').text.strip(): 
-            servicio.find('span', class_='component-status').text.strip()
-            for servicio in servicios
-        }
+        servicios = servicios_container.find_all('div', class_='component-inner-container')
+        
+        if not servicios:
+            print("No se encontraron servicios individuales en la página.")
+            return None
+
+        estado_servicios = {}
+        for servicio in servicios:
+            nombre = servicio.find('span', class_='name').text.strip()
+            estado = servicio.find('span', class_='component-status').text.strip()
+            estado_servicios[nombre] = estado
+        
+        return estado_servicios
+
+    except requests.exceptions.Timeout:
+        print(f'Error: La solicitud a {URL_TRANSBANK} tardó demasiado tiempo en responder.')
+        return None
     except requests.RequestException as e:
-        print(f'Error al realizar la solicitud HTTP: {e}')
+        print(f'Error de red al acceder a la página de Transbank: {e}')
+        return None
     except Exception as e:
-        print(f'Error inesperado: {e}')
-    return None
-
-def mostrar_estado(servicio, estado):
-    """Devuelve el estado del servicio con el emoji correspondiente."""
-    emoji = EMOJIS.get(estado, "❓")  # Signo de interrogación en caso de estado desconocido
-    return f"{emoji} {servicio}: {estado}"
+        print(f'Ocurrió un error inesperado al procesar la página: {e}')
+        return None
 
 def main():
     """Función principal para obtener y mostrar el estado de los servicios."""
-    estado = obtener_estado_transbank()
-    if estado:
-        print("Estado de Transbank Developers:")
-        for servicio, estado in estado.items():
-            print(mostrar_estado(servicio, estado))
+    print("Obteniendo estado de Transbank Developers...")
+    print("---------------------------------------")
+    
+    estados = obtener_estado_transbank()
+    
+    if estados:
+        for servicio, estado in estados.items():
+            # Usamos .get() para obtener el emoji, con "❓" como valor por defecto
+            emoji = EMOJIS.get(estado, "❓")
+            print(f"{emoji} {servicio}: {estado}")
     else:
-        print("No se pudo obtener el estado de Transbank Developers en este momento.")
+        print("❌ No se pudo obtener el estado de Transbank en este momento.")
 
 if __name__ == "__main__":
     main()

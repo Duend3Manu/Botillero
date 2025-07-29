@@ -107,8 +107,15 @@ async function commandHandler(client, message) {
         case 'num': case 'tel': return handlePhoneSearch(client, message);
         case 'tne': case 'pase': return handleTneSearch(message);
         
-        default: break;
-    }
+// --- AÑADE ESTE CASO TEMPORAL ---
+    case 'id':
+        console.log('ID de este chat:', message.from);
+        message.reply(`ℹ️ El ID de este chat es:\n${message.from}`);
+        break;
+    // ---------------------------------
+
+    default: break;
+}
 
     if (replyMessage) {
         message.reply(replyMessage);
