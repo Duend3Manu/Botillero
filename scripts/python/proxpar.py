@@ -2,73 +2,89 @@
 import sys
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime
+import io
 
 # Asegúrate de que la salida sea en UTF-8
 if sys.stdout.encoding != 'utf-8':
-    import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-# Diccionario para convertir letras a días de la semana
+meses_a_numero = {
+    'ene': 1, 'feb': 2, 'mar': 3, 'abr': 4, 'may': 5, 'jun': 6,
+    'jul': 7, 'ago': 8, 'sept': 9, 'oct': 10, 'nov': 11, 'dic': 12
+}
+
 dias_semana = {
-    'L': 'Lunes',
-    'M': 'Martes',
-    'X': 'Miércoles',
-    'J': 'Jueves',
-    'V': 'Viernes',
-    'S': 'Sábado',
-    'D': 'Domingo'
+    'L': 'Lunes', 'M': 'Martes', 'X': 'Miércoles', 'J': 'Jueves',
+    'V': 'Viernes', 'S': 'Sábado', 'D': 'Domingo'
 }
 
 urlas = 'https://chile.as.com/resultados/futbol/chile/calendario/?omnil=mpal'
 page = requests.get(urlas)
 
-fechas_buscadas = ['18 Jul. - 07 Sept.']
+fecha_actual = datetime.now()
 
 if page.status_code == 200:
     soup = BeautifulSoup(page.content, 'html.parser')
-    jornadas = soup.findAll("div", {"class": "cont-modulo resultados"})
+    jornadas_html = soup.find_all("div", {"class": "cont-modulo resultados"})
     
-    for jornada in jornadas:
-        fechaJornada = jornada.find('h2').find('span').text.strip()
-        if fechaJornada in fechas_buscadas:
-            titulo = jornada.find('h2').find('a').text.strip()
-            print(f"--{titulo}--")
-            print(fechaJornada)
-            print("---------------------------------\n")
+    jornadas_candidatas = []
+    
+    for jornada_html in jornadas_html:
+        fecha_texto = jornada_html.find('h2').find('span').text.strip()
+        try:
+            # --- LÓGICA DE PARSEO A PRUEBA DE INCONSISTENCIAS ---
+            partes = fecha_texto.lower().replace('.', '').split(' - ')
+            
+            # Revisa si la primera parte tiene solo el día (formato "DD - DD Mmm")
+            if len(partes[0].split()) == 1 and partes[0].isdigit():
+                dia_inicio_str = partes[0]
+                # Tomamos el mes de la segunda parte
+                mes_inicio_str = partes[1].split()[1]
+            else: # Formato "DD Mmm - DD Mmm"
+                dia_inicio_str, mes_inicio_str = partes[0].split()
 
-            partidos = jornada.find('tbody').find_all('tr')
-            for partido in partidos:
-                equipo_local = partido.find('td', {"class": "col-equipo-local"}).text.strip()
-                resultado_tag = partido.find('td', {"class": "col-resultado"})
-                equipo_visitante = partido.find('td', {"class": "col-equipo-visitante"}).text.strip()
+            mes_inicio_num = meses_a_numero[mes_inicio_str]
+            año_a_usar = fecha_actual.year
+            
+            fecha_inicio = datetime(año_a_usar, mes_inicio_num, int(dia_inicio_str))
+            
+            if fecha_inicio.date() <= fecha_actual.date():
+                jornadas_candidatas.append(jornada_html)
 
-                resultado = resultado_tag.text.strip()
-                if ' - ' in resultado:
-                    marcador = resultado
-                else:
-                    marcador = " - "
-                
-                # Detectar día y hora
-                if resultado_tag.has_attr('class'):
-                    clases = resultado_tag['class']
-                    if 'comenzado' in clases:
-                        dia_hora = "En juego"
-                    else:
-                        dia_hora = resultado
-                else:
-                    dia_hora = resultado
+        except (ValueError, IndexError, KeyError) as e:
+            continue
 
-                partes_resultado = marcador.split()
-                dia_letra = dia_hora[0] if dia_hora else ""
-                hora = dia_hora[1:] if dia_hora else ""
+    if jornadas_candidatas:
+        jornada_actual = jornadas_candidatas[-1]
+        
+        titulo = jornada_actual.find('h2').find('a').text.strip()
+        fecha_texto = jornada_actual.find('h2').find('span').text.strip()
+        
+        print(f"🏆 {titulo} 🏆")
+        print(f"🗓️ {fecha_texto}\n")
+
+        partidos = jornada_actual.find('tbody').find_all('tr')
+        for partido in partidos:
+            equipo_local = partido.find('td', {"class": "col-equipo-local"}).text.strip()
+            resultado_tag = partido.find('td', {"class": "col-resultado"})
+            equipo_visitante = partido.find('td', {"class": "col-equipo-visitante"}).text.strip()
+            
+            resultado = resultado_tag.text.strip()
+            marcador = resultado if ' - ' in resultado else "vs"
+            
+            if marcador.replace(' ', '').replace('-', '').isdigit():
+                 print(f"✅ {equipo_local} | {marcador} | {equipo_visitante}")
+            else:
+                dia_hora = resultado
+                dia_letra = dia_hora[0] if dia_hora and not dia_hora[0].isdigit() else ""
+                hora = dia_hora[1:] if dia_letra else dia_hora
                 dia = dias_semana.get(dia_letra, "")
+                print(f"⚽ {equipo_local} vs {equipo_visitante}\n   └─ {dia} {hora}")
 
-                # Ajuste de formato de impresión
-                if dia and hora:
-                    print(f"{equipo_local} |{dia} {hora}| {equipo_visitante}\n")
-                else:
-                    print(f"{equipo_local} |{marcador}| {equipo_visitante}\n")
+        print("\n---------------------------------")
+    else:
+        print("No se encontró una jornada activa en la página.")
 
-            print("---------------------------------\n")
 else:
     print(f"Error en request: {page.status_code}")
