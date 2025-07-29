@@ -23,18 +23,33 @@ client.on('ready', () => {
 });
 
 // --- MANEJADORES DE EVENTOS ---
-
-// 1. Cuando se recibe un mensaje (para comandos y palabras clave)
 client.on('message', message => commandHandler(client, message));
-
-// 2. Cuando se crea un mensaje (para el detector de editados/borrados)
 client.on('message_create', message => handleMessageCreate(message));
-
-// 3. Cuando se borra un mensaje
-client.on('message_revoke_everyone', (after, before) => handleMessageRevoke(client, after, before));
-
-// 4. Cuando se edita un mensaje
+client.in('message_revoke_everyone', (after, before) => handleMessageRevoke(client, after, before));
 client.on('message_update', message => handleMessageUpdate(client, message));
+
+// --- SERVIDOR DE NOTIFICACIONES ---
+const express = require('express');
+const app = express();
+app.use(express.json());
+
+const NOTIFICATION_PORT = 3001;
+const GROUP_ID = '56933400670-1571689305@g.us'; 
+
+app.post('/send-notification', (req, res) => {
+    const message = req.body.message;
+    if (message) {
+        console.log(`(API) -> Mensaje recibido de Python: "${message}"`);
+        client.sendMessage(GROUP_ID, message);
+        res.status(200).send({ status: 'ok', message: 'Notificación enviada al grupo.' });
+    } else {
+        res.status(400).send({ status: 'error', message: 'No se recibió ningún mensaje.' });
+    }
+});
+
+app.listen(NOTIFICATION_PORT, () => {
+    console.log(`(API) -> Servidor de notificaciones escuchando en el puerto ${NOTIFICATION_PORT}`);
+});
 
 // Iniciar el cliente
 client.initialize();
