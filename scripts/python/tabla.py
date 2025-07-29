@@ -1,62 +1,80 @@
 import sys
-import codecs
+from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
-import requests
-import pandas as pd
+import csv
+import io
 
-# Configurar la codificación de caracteres de la consola a UTF-8
-sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer)
+# Configuración para la salida en UTF-8
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 url = 'https://chile.as.com/resultados/futbol/chile/clasificacion/?omnil=mpal'
 
-try:
-    page = requests.get(url)
-    page.raise_for_status()  # Lanza una excepción si la solicitud no fue exitosa
-except requests.RequestException as e:
-    print(f"Error al acceder a la página: {e}")
-    sys.exit()
+def main():
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, wait_until='networkidle')
+            
+            # SELECTOR CORREGIDO: Esperamos por la etiqueta <table> con la clase 'tabla-datos'
+            page.wait_for_selector('table.tabla-datos', timeout=20000)
+            
+            content = page.content()
+            browser.close()
 
-soup = BeautifulSoup(page.content, 'html.parser')
+    except Exception as e:
+        print(f"Error durante la navegación con Playwright: {e}")
+        sys.exit()
 
-# Extraer los equipos y puntos
-try:
-    eq = soup.find_all('span', class_='nombre-equipo')
-    equipos = [i.text.strip() for i in eq[:16]]
+    soup = BeautifulSoup(content, 'html.parser')
+    tabla_de_datos = []
 
-    pt = soup.find_all('td', class_='destacado')
-    puntos = [i.text.strip() for i in pt[:16]]
-except AttributeError as e:
-    print(f"Error al extraer datos de la página: {e}")
-    sys.exit()
+    try:
+        # SELECTOR CORREGIDO: Buscamos la tabla con su nueva clase
+        tabla_container = soup.find('table', class_='tabla-datos')
+        
+        for i, fila in enumerate(tabla_container.find('tbody').find_all('tr')):
+            nombre_equipo_tag = fila.find('span', class_='nombre-equipo')
+            puntos_tag = fila.find('td', class_='destacado')
+            
+            if nombre_equipo_tag and puntos_tag:
+                # La posición ahora viene en la primera celda de la fila
+                posicion_tag = fila.find('td')
+                posicion = posicion_tag.text.strip() if posicion_tag else str(i + 1)
+                
+                equipo = nombre_equipo_tag.text.strip()
+                puntos = puntos_tag.text.strip()
+                tabla_de_datos.append([posicion, equipo, puntos])
 
-# Verificar que todas las listas tienen la misma longitud
-if len(equipos) != len(puntos):
-    raise ValueError("Las listas de equipos y puntos no tienen la misma longitud")
+    except AttributeError:
+        print("Error: No se pudo encontrar la tabla incluso después de cargar la página.")
+        sys.exit()
 
-# Crear DataFrame
-df = pd.DataFrame({
-    'Posición': list(range(1, 17)),
-    'Equipo': equipos,
-    'Puntos': puntos,
-})
+    # --- Guardado en CSV ---
+    filename = "tabla.csv"
+    try:
+        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['Posicion', 'Equipo', 'Puntos'])
+            writer.writerows(tabla_de_datos)
+    except IOError as e:
+        print(f"Error al escribir en el archivo {filename}: {e}")
 
-# Reducción del tamaño de las columnas para adaptar a pantalla de WhatsApp
-df['Equipo'] = df['Equipo'].str.slice(0, 20)  # Limitar longitud del equipo
-df['Puntos'] = df['Puntos'].str.slice(0, 6)   # Limitar longitud de puntos
+    # --- Impresión en Consola ---
+    def format_row(pos, equipo, puntos):
+        equipo_corto = (equipo[:18] + '..') if len(equipo) > 20 else equipo
+        return f"{str(pos):<3} {equipo_corto:<20} {puntos:>5}"
 
-# Especificar el nombre fijo del archivo CSV
-filename = "tabla.csv"  # Nombre fijo para el archivo CSV
+    if not tabla_de_datos:
+        print("No se encontraron datos de equipos.")
+    else:
+        print('-------------------------------')
+        print(format_row('Pos', 'Equipo', 'Pts'))
+        print('-------------------------------')
+        for fila in tabla_de_datos:
+            print(format_row(fila[0], fila[1], fila[2]))
+        print('-------------------------------')
 
-# Guardar tabla en archivo CSV
-df.to_csv(filename, index=False, encoding='utf-8')
-
-# Función para formatear cada fila para que no exceda 34 caracteres
-def format_row(pos, equipo, puntos):
-    # Alinear la posición a la izquierda con 2 caracteres, el equipo a la izquierda con 20 caracteres, y los puntos a la derecha con 6 caracteres
-    return f"{pos:<2} {equipo:<20} {puntos:>6}"
-
-# Imprimir tabla con líneas separadoras y posición
-print('------------------------------')
-for index, row in df.iterrows():
-    print(format_row(row['Posición'], row['Equipo'], row['Puntos']))
-print('------------------------------')
+# --- Ejecutor del código ---
+if __name__ == "__main__":
+    main()
