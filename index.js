@@ -5,6 +5,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const commandHandler = require('./src/handlers/command.handler');
 const { handleMessageCreate, handleMessageUpdate, handleMessageRevoke } = require('./src/handlers/events.handler');
+const express = require('express');
 
 console.log("Iniciando Botillero v2.0 (Arquitectura Modular)...");
 
@@ -25,11 +26,11 @@ client.on('ready', () => {
 // --- MANEJADORES DE EVENTOS ---
 client.on('message', message => commandHandler(client, message));
 client.on('message_create', message => handleMessageCreate(message));
-client.in('message_revoke_everyone', (after, before) => handleMessageRevoke(client, after, before));
+// LÍNEA CORREGIDA:
+client.on('message_revoke_everyone', (after, before) => handleMessageRevoke(client, after, before));
 client.on('message_update', message => handleMessageUpdate(client, message));
 
 // --- SERVIDOR DE NOTIFICACIONES ---
-const express = require('express');
 const app = express();
 app.use(express.json());
 
