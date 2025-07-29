@@ -38,5 +38,3 @@ client.on('message_update', message => handleMessageUpdate(client, message));
 
 // Iniciar el cliente
 client.initialize();
-
-log: vamos a ver si se sincroniza
