@@ -1,101 +1,66 @@
-// src/services/league.service.js
+// src/services/league.service.js (VERSIÓN FINAL Y CORRECTA)
 "use strict";
 
-const axios = require('axios');
+const path = require('path');
+const { spawn } = require('child_process');
 
-// Configuramos la petición a la API
-const api = axios.create({
-    baseURL: 'https://v3.football.api-sports.io/',
-    headers: {
-        'x-rapidapi-host': 'v3.football.api-sports.io',
-        'x-rapidapi-key': process.env.API_FOOTBALL_KEY 
-    }
-});
-
-const LEAGUE_ID = 265; // ID de la Primera División de Chile
-const SEASON = new Date().getFullYear(); // Temporada actual
+// Ruta a la carpeta donde guardas tus scripts de Python
+const SCRIPTS_PATH = path.join(__dirname, '..', '..', 'scripts', 'python');
+// Comando para ejecutar Python (usualmente 'python' o 'python3')
+const PYTHON_EXECUTABLE = 'python'; 
 
 /**
- * Obtiene los próximos 5 partidos de la liga.
- * ¡Soluciona el problema de las fechas manuales!
+ * Función genérica para ejecutar cualquier script de Python y devolver su salida.
+ * @param {string} scriptName El nombre del archivo .py a ejecutar.
+ * @returns {Promise<string>} La salida del script.
  */
-async function getLeagueUpcomingMatches() {
-    try {
-        // --- AÑADE ESTA LÍNEA AQUÍ ---
-        console.log("CLAVE DE API QUE ESTOY USANDO:", process.env.API_FOOTBALL_KEY);
-        // -----------------------------
+function executePythonScript(scriptName) {
+    return new Promise((resolve, reject) => {
+        const scriptPath = path.join(SCRIPTS_PATH, scriptName);
+        const pythonProcess = spawn(PYTHON_EXECUTABLE, ['-u', scriptPath]);
 
-        const { data } = await api.get('fixtures', {
-            params: {
-                league: LEAGUE_ID,
-                season: SEASON,
-                next: 5 
+        let output = '';
+        let errorOutput = '';
+
+        pythonProcess.stdout.on('data', (data) => {
+            output += data.toString();
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+            errorOutput += data.toString();
+        });
+
+        pythonProcess.on('close', (code) => {
+            if (code !== 0) {
+                console.error(`Error al ejecutar el script ${scriptName}:`, errorOutput);
+                reject(new Error(`El script de Python (${scriptName}) finalizó con errores.`));
+            } else {
+                resolve(output.trim());
             }
         });
-
-        if (data.response.length === 0) {
-            return 'No hay próximos partidos programados en la liga chilena en este momento.';
-        }
-
-        let reply = '🇨🇱 *Próximos Partidos del Campeonato Nacional:*\n\n';
-        data.response.forEach(fixture => {
-            const matchDate = new Date(fixture.fixture.date).toLocaleString('es-CL', { timeZone: 'America/Santiago' });
-            reply += `⚽ *${fixture.teams.home.name} vs ${fixture.teams.away.name}*\n`;
-            reply += `🗓️ _${matchDate}_\n`;
-            reply += `🏟️ _${fixture.fixture.venue.name}_\n\n`;
-        });
-
-        return reply;
-
-    } catch (error) {
-        console.error("Error al obtener próximos partidos:", error.response?.data);
-        return 'Hubo un error al consultar los próximos partidos.';
-    }
+    });
 }
 
-/**
- * Obtiene los partidos que se están jugando AHORA.
- * ¡Soluciona el problema del desfase de 2 minutos!
- */
-async function getLeagueLiveMatches() {
-    try {
-        const { data } = await api.get('fixtures', {
-            params: {
-                league: LEAGUE_ID,
-                season: SEASON,
-                live: 'all' // Magia: ¡Solo partidos en vivo!
-            }
-        });
-
-        if (data.response.length === 0) {
-            return 'No hay partidos de la liga chilena en vivo en este momento.';
-        }
-
-        let reply = '🔴 *Partidos EN VIVO del Campeonato Nacional:*\n\n';
-        data.response.forEach(fixture => {
-            reply += `*${fixture.teams.home.name} ${fixture.goals.home} - ${fixture.goals.away} ${fixture.teams.away.name}*\n`;
-            reply += `⏱️ _Minuto ${fixture.fixture.status.elapsed}'_\n\n`;
-        });
-        
-        return reply;
-
-    } catch (error) {
-        console.error("Error al obtener partidos en vivo:", error.response?.data);
-        return 'Hubo un error al consultar los partidos en vivo.';
-    }
-}
+// --- Funciones para cada comando de fútbol ---
 
 async function getLeagueTable() {
-    // Esta función también se puede mejorar para usar la API y obtener la tabla de posiciones
-    // Endpoint: 'standings', params: { league: LEAGUE_ID, season: SEASON }
-    // Por ahora la dejamos como estaba para no cambiar todo de una vez.
-    // Recomiendo actualizarla también.
-    return "La función de tabla de posiciones necesita ser actualizada a la nueva API.";
+    console.log(`(Servicio) -> Ejecutando tabla.py...`);
+    return await executePythonScript('tabla.py');
 }
 
+async function getLeagueUpcomingMatches() {
+    console.log(`(Servicio) -> Ejecutando proxpar.py...`);
+    return await executePythonScript('proxpar.py');
+}
+
+// --- NUEVA FUNCIÓN PARA !partidos ---
+async function getMatchDaySummary() {
+    console.log(`(Servicio) -> Ejecutando partidos.py...`);
+    return await executePythonScript('partidos.py');
+}
 
 module.exports = {
+    getLeagueTable,
     getLeagueUpcomingMatches,
-    getLeagueLiveMatches, // Exportamos la nueva función
-    getLeagueTable
+    getMatchDaySummary // Exportamos la nueva función junto a las antiguas
 };

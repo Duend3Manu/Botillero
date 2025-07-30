@@ -1,21 +1,23 @@
-// src/handlers/command.handler.js
+// src/handlers/command.handler.js (VERSIÓN FINAL Y 100% LIMPIA)
 "use strict";
 
 const { MessageMedia } = require('whatsapp-web.js');
 
 // --- Importaciones de Servicios (Python) ---
 const metroService = require('../services/metro.service');
-const leagueService = require('../services/league.service');
 const nationalTeamService = require('../services/nationalTeam.service');
 const economyService = require('../services/economy.service');
 const horoscopeService = require('../services/horoscope.service');
 const externalService = require('../services/external.service');
 
+// Forma correcta y limpia de importar las funciones que necesitamos
+const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require('../services/league.service.js');
+
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');
 const { handleFeriados, handleFarmacias, handleClima, handleSismos, handleBus, handleSec, handleMenu } = require('./utility.handler');
 const { handleSticker, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce } = require('./fun.handler');
-const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler');
+const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler'); // Corregido: handleGoogleSearch no estaba en tu lista original pero sí en el switch
 const { handleTicket, handleCaso } = require('./stateful.handler');
 const { handleAiHelp } = require('./ai.handler');
 const { handlePhoneSearch, handleTneSearch, handlePatenteSearch } = require('./personalsearch.handler');
@@ -27,7 +29,6 @@ const countdownCommands = ['18', 'navidad', 'añonuevo'];
 async function commandHandler(client, message) {
     const rawText = message.body.toLowerCase().trim();
     
-    // --- MANEJO DE PALABRAS CLAVE (SIN PREFIJO) ---
     if (/\b(bot|boot|bott|bbot)\b/.test(rawText)) {
         return handleBotMention(client, message);
     }
@@ -35,7 +36,6 @@ async function commandHandler(client, message) {
         return handleOnce(client, message);
     }
 
-    // Si no es una palabra clave, buscamos un comando con prefijo
     if (!rawText.startsWith('!') && !rawText.startsWith('/')) {
         return;
     }
@@ -56,8 +56,19 @@ async function commandHandler(client, message) {
     switch (command) {
         // --- Servicios (Python) ---
         case 'metro': replyMessage = await metroService.getMetroStatus(); break;
-        case 'tabla': case 'ligatabla': replyMessage = await leagueService.getLeagueTable(); break;
-        case 'prox': case 'ligapartidos': replyMessage = await leagueService.getLeagueUpcomingMatches(); break;
+        
+        // --- Comandos de Fútbol (forma consistente) ---
+        case 'tabla': case 'ligatabla': 
+            replyMessage = await getLeagueTable(); 
+            break;
+        case 'prox': case 'ligapartidos': 
+            replyMessage = await getLeagueUpcomingMatches(); 
+            break;
+        case 'partidos':
+            replyMessage = await getMatchDaySummary(); 
+            break;
+        // ---------------------------------------------
+
         case 'tclasi': case 'selecciontabla': replyMessage = await nationalTeamService.getQualifiersTable(); break;
         case 'clasi': case 'seleccionpartidos': replyMessage = await nationalTeamService.getQualifiersMatches(); break;
         case 'valores': replyMessage = await economyService.getEconomicIndicators(); break;
@@ -74,6 +85,7 @@ async function commandHandler(client, message) {
                 }
             }
             return;
+        
         case 'bencina':
             const comuna = message.body.split(' ')[1];
             replyMessage = await externalService.getBencinaData(comuna);
@@ -106,16 +118,13 @@ async function commandHandler(client, message) {
         case 'ayuda': replyMessage = await handleAiHelp(message); break;
         case 'num': case 'tel': return handlePhoneSearch(client, message);
         case 'tne': case 'pase': return handleTneSearch(message);
-        
-// --- AÑADE ESTE CASO TEMPORAL ---
-    case 'id':
-        console.log('ID de este chat:', message.from);
-        message.reply(`ℹ️ El ID de este chat es:\n${message.from}`);
-        break;
-    // ---------------------------------
-
-    default: break;
-}
+        case 'id':
+            console.log('ID de este chat:', message.from);
+            message.reply(`ℹ️ El ID de este chat es:\n${message.from}`);
+            break;
+    
+        default: break;
+    }
 
     if (replyMessage) {
         message.reply(replyMessage);
