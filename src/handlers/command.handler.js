@@ -9,6 +9,7 @@ const nationalTeamService = require('../services/nationalTeam.service');
 const economyService = require('../services/economy.service');
 const horoscopeService = require('../services/horoscope.service');
 const externalService = require('../services/external.service');
+const messagingService = require('../services/messaging.service.js');
 
 // Forma correcta y limpia de importar las funciones que necesitamos
 const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require('../services/league.service.js');
@@ -54,20 +55,30 @@ async function commandHandler(client, message) {
     }
 
     switch (command) {
-        // --- Servicios (Python) ---
-        case 'metro': replyMessage = await metroService.getMetroStatus(); break;
-        
-        // --- Comandos de Fútbol (forma consistente) ---
-        case 'tabla': case 'ligatabla': 
-            replyMessage = await getLeagueTable(); 
+case 'tabla':
+        case 'ligatabla':
+            messagingService.sendLoadingMessage(message); // Envía "cargando..."
+            const table = await getLeagueTable();        // Espera el resultado
+            client.sendMessage(message.from, table);     // Envía el resultado final
             break;
-        case 'prox': case 'ligapartidos': 
-            replyMessage = await getLeagueUpcomingMatches(); 
+        case 'prox':
+        case 'ligapartidos':
+            messagingService.sendLoadingMessage(message);
+            const prox = await getLeagueUpcomingMatches();
+            client.sendMessage(message.from, prox);
             break;
         case 'partidos':
-            replyMessage = await getMatchDaySummary(); 
+            messagingService.sendLoadingMessage(message);
+            const partidos = await getMatchDaySummary();
+            client.sendMessage(message.from, partidos);
             break;
-        // ---------------------------------------------
+
+        // --- Otros comandos lentos ---
+        case 'metro':
+            messagingService.sendLoadingMessage(message);
+            const metroStatus = await metroService.getMetroStatus();
+            client.sendMessage(message.from, metroStatus);
+            break;
 
         case 'tclasi': case 'selecciontabla': replyMessage = await nationalTeamService.getQualifiersTable(); break;
         case 'clasi': case 'seleccionpartidos': replyMessage = await nationalTeamService.getQualifiersMatches(); break;
