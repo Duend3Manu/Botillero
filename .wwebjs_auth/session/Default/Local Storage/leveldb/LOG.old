@@ -1,3 +1,2 @@
-2025/07/14-00:54:49.836 1fd8 Reusing MANIFEST C:\bots\botillero\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
-2025/07/14-00:54:49.837 1fd8 Recovering log #7
-2025/07/14-00:54:49.838 1fd8 Reusing old log C:\bots\botillero\.wwebjs_auth\session\Default\Local Storage\leveldb/000007.log 
+2025/07/29-19:51:25.281 f9c Creating DB C:\bots\botillero\.wwebjs_auth\session\Default\Local Storage\leveldb since it was missing.
+2025/07/29-19:51:25.307 f9c Reusing MANIFEST C:\bots\botillero\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001

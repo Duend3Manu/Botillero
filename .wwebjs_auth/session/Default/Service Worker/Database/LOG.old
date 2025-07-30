@@ -1,3 +1,2 @@
-2025/07/14-00:54:49.847 1fd8 Reusing MANIFEST C:\bots\botillero\.wwebjs_auth\session\Default\Service Worker\Database/MANIFEST-000001
-2025/07/14-00:54:49.848 1fd8 Recovering log #3
-2025/07/14-00:54:49.849 1fd8 Reusing old log C:\bots\botillero\.wwebjs_auth\session\Default\Service Worker\Database/000003.log 
+2025/07/29-19:51:34.527 f9c Creating DB C:\bots\botillero\.wwebjs_auth\session\Default\Service Worker\Database since it was missing.
+2025/07/29-19:51:34.541 f9c Reusing MANIFEST C:\bots\botillero\.wwebjs_auth\session\Default\Service Worker\Database/MANIFEST-000001
