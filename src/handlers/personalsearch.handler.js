@@ -1,4 +1,4 @@
-/ src/handlers/personalsearch.handler.js
+// src/handlers/personalsearch.handler.js
 "use strict";
 
 const { getPatenteDataFormatted, getRutData } = require('../utils/apiService');
