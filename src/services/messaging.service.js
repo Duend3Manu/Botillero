@@ -1,4 +1,4 @@
-// src/services/messaging.service.js (Versión final SIN IMAGEN)
+// src/services/messaging.service.js
 "use strict";
 
 const fs = require('fs');
@@ -10,7 +10,12 @@ const path = require('path');
  */
 function getRandomTrackFromLocalPlaylist() {
     try {
-        const playlistPath = path.join(__dirname, '..', 'data', 'playlist_local.json');
+        // Asumiendo que tendrás una carpeta 'data' con este archivo
+        const playlistPath = path.join(__dirname, '..', '..', 'data', 'playlist_local.json');
+        if (!fs.existsSync(playlistPath)) {
+            console.warn("Advertencia: No se encontró el archivo playlist_local.json. El mensaje de carga no mostrará canciones.");
+            return null;
+        }
         const playlistData = fs.readFileSync(playlistPath, 'utf-8');
         const playlist = JSON.parse(playlistData);
 
@@ -35,17 +40,12 @@ async function sendLoadingMessage(message) {
         const track = getRandomTrackFromLocalPlaylist();
 
         if (track && track.nombre && track.url) {
-            // 1. Formateamos el mensaje de texto
             const textMessage = `Procesando tu solicitud... ⏳\n\n_Mientras esperas, dale una escuchada a esto:_\n\n🎶 *${track.nombre}* - ${track.artistas}\n🔗 ${track.url}`;
-            
-            // 2. Enviamos directamente el texto, sin media.
             await message.reply(textMessage);
         } else {
-            // Mensaje de respaldo si no encuentra la playlist
             await message.reply("Procesando tu solicitud... ⏳");
         }
     } catch (error) {
-        // Mensaje de respaldo si ocurre cualquier otro error
         console.error("Error al generar el mensaje de carga:", error.message);
         await message.reply("Procesando tu solicitud... ⏳");
     }

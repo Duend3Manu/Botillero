@@ -1,6 +1,3 @@
-// src/handlers/command.handler.js (VERSIÓN FINAL Y 100% LIMPIA)
-"use strict";
-
 const { MessageMedia } = require('whatsapp-web.js');
 
 // --- Importaciones de Servicios (Python) ---
@@ -10,18 +7,17 @@ const economyService = require('../services/economy.service');
 const horoscopeService = require('../services/horoscope.service');
 const externalService = require('../services/external.service');
 const messagingService = require('../services/messaging.service.js');
-
-// Forma correcta y limpia de importar las funciones que necesitamos
 const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require('../services/league.service.js');
 
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');
 const { handleFeriados, handleFarmacias, handleClima, handleSismos, handleBus, handleSec, handleMenu } = require('./utility.handler');
 const { handleSticker, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce } = require('./fun.handler');
-const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler'); // Corregido: handleGoogleSearch no estaba en tu lista original pero sí en el switch
+const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler');
 const { handleTicket, handleCaso } = require('./stateful.handler');
 const { handleAiHelp } = require('./ai.handler');
 const { handlePhoneSearch, handleTneSearch, handlePatenteSearch } = require('./personalsearch.handler');
+const { handleNetworkQuery, handleNicClSearch } = require('./network.handler'); // <-- AÑADIDO
 
 // --- Lógica Principal ---
 const soundCommands = getSoundCommands();
@@ -55,11 +51,12 @@ async function commandHandler(client, message) {
     }
 
     switch (command) {
-case 'tabla':
+        // --- Comandos con mensaje de "cargando..." ---
+        case 'tabla':
         case 'ligatabla':
-            messagingService.sendLoadingMessage(message); // Envía "cargando..."
-            const table = await getLeagueTable();        // Espera el resultado
-            client.sendMessage(message.from, table);     // Envía el resultado final
+            messagingService.sendLoadingMessage(message);
+            const table = await getLeagueTable();
+            client.sendMessage(message.from, table);
             break;
         case 'prox':
         case 'ligapartidos':
@@ -72,14 +69,13 @@ case 'tabla':
             const partidos = await getMatchDaySummary();
             client.sendMessage(message.from, partidos);
             break;
-
-        // --- Otros comandos lentos ---
         case 'metro':
             messagingService.sendLoadingMessage(message);
             const metroStatus = await metroService.getMetroStatus();
             client.sendMessage(message.from, metroStatus);
             break;
 
+        // --- Otros Servicios (Python) ---
         case 'tclasi': case 'selecciontabla': replyMessage = await nationalTeamService.getQualifiersTable(); break;
         case 'clasi': case 'seleccionpartidos': replyMessage = await nationalTeamService.getQualifiersMatches(); break;
         case 'valores': replyMessage = await economyService.getEconomicIndicators(); break;
@@ -132,6 +128,15 @@ case 'tabla':
         case 'id':
             console.log('ID de este chat:', message.from);
             message.reply(`ℹ️ El ID de este chat es:\n${message.from}`);
+            break;
+        
+        // --- COMANDOS DE RED (AÑADIDOS) ---
+        case 'whois':
+        case 'net':
+            replyMessage = await handleNetworkQuery(message);
+            break;
+        case 'nic':
+            replyMessage = await handleNicClSearch(message);
             break;
     
         default: break;
