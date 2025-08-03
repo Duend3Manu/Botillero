@@ -1,3 +1,6 @@
+// src/handlers/command.handler.js (VERSIÓN FINAL Y 100% UNIFICADA)
+"use strict";
+
 const { MessageMedia } = require('whatsapp-web.js');
 
 // --- Importaciones de Servicios (Python) ---

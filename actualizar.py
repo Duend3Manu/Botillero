@@ -4,19 +4,25 @@ def ejecutar(comando):
     resultado = subprocess.run(comando, shell=True, text=True)
     return resultado.returncode == 0
 
-print("🔥 Preparando limpieza total del proyecto local...")
+print("🔥 Reiniciando proyecto con protección a bibliotecas sagradas...")
 
-# 1. Stash temporal por si te arrepentís
-print("📦 Guardando estado actual en stash (por si las moscas)...")
-ejecutar("git stash save --include-untracked 'AutoStash antes de destrucción'")
+# 1. Stash temporal de todo lo actual
+print("📦 Guardando todo en stash (por si luego hay arrepentimientos)...")
+ejecutar("git stash save --include-untracked 'AutoStash antes del reset brutal'")
 
-# 2. Forzar pull desde origin
-print("🔁 Haciendo hard reset con contenido de GitHub...")
+# 2. Hard reset al contenido de GitHub
+print("🔁 Aplicando hard reset desde GitHub...")
 ejecutar("git fetch origin")
 ejecutar("git reset --hard origin/main")
 
-# 3. Limpieza extra (opcional)
-print("🧼 Limpiando archivos ignorados...")
-ejecutar("git clean -fdx")
+# 3. Limpieza selectiva — se conservan tus reliquias
+print("🧼 Limpiando lo ignorado... excepto tus carpetas importantes.")
+ejecutar(
+    "git clean -fdx "
+    "-e node_modules/ "
+    "-e .wwebjs_auth/ "
+    "-e .wwebjs_auth/session "
+    "-e .wwebjs_cache/"
+)
 
-print("✅ Todo reemplazado sin drama, como en un domingo sin política.")
+print("✅ Proyecto renovado, bibliotecas intactas, sesión protegida 🐾✨")
