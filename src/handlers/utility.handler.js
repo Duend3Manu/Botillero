@@ -7,12 +7,126 @@ const puppeteer = require('puppeteer');
 const config = require('../config');
 const { generateWhatsAppMessage } = require('../utils/secService');
 
+// --- Lógica para !menu (ACTUALIZADA) ---
+function handleMenu() {
+    return `
+🤖 *¡Wena! Soy Botillero, tu asistente.* 🤖
+
+Aquí tení la lista actualizada de todas las weás que cacho hacer.
+_Usa \`!\` o \`/\` pa' los comandos, da lo mismo._
+
+---
+*⚙️ Pa'l Día a Día*
+---
+*Comando:* \`!clima [ciudad]\`
+_Pa' qué sirve: Te tiro el pronóstico del tiempo pa' la ciudad que querai._
+
+*Comando:* \`!sismos\`
+_Pa' qué sirve: Te sapeo los últimos 5 temblores que han habido en Chilito._
+
+*Comando:* \`!far [comuna]\`
+_Pa' qué sirve: Te digo qué farmacia está de turno en tu comuna._
+
+*Comando:* \`!metro\`
+_Pa' qué sirve: Pa' cachar cómo anda el metro de Santiago en tiempo real._
+
+*Comando:* \`!bus [código_paradero]\`
+_Pa' qué sirve: Te digo en cuánto pasa la micro, al toque._
+
+*Comando:* \`!sec\` o \`!secrm\`
+_Pa' qué sirve: Pa' cachar si se cortó la luz a nivel nacional o solo en la RM._
+
+*Comando:* \`!feriados\`
+_Pa' qué sirve: Te muestra los próximos feriados, pa' saber cuándo no se trabaja._
+
+---
+*💰 Finanzas y Servicios*
+---
+*Comando:* \`!valores\`
+_Pa' qué sirve: Te canto los indicadores económicos del día (Dólar, UF, etc.)._
+
+*Comando:* \`!bolsa\`
+_Pa' qué sirve: Un resumen de cómo anda la bolsa de comercio._
+
+*Comando:* \`!trstatus\`
+_Pa' qué sirve: Revisa el estado de los servicios de Transbank._
+
+---
+*⚽ La Pelotita*
+---
+*Comando:* \`!tabla\`
+_Pa' qué sirve: La tabla de posiciones de la liga chilena._
+
+*Comando:* \`!prox\`
+_Pa' qué sirve: Los próximos partidos de la fecha del campeonato._
+
+*Comando:* \`!partidos\`
+_Pa' qué sirve: Un resumen de los partidos del día._
+
+*Comando:* \`!tclasi\`
+_Pa' qué sirve: Cómo va la Roja en las clasificatorias._
+
+*Comando:* \`!clasi\`
+_Pa' qué sirve: Los próximos partidos de la selección chilena._
+
+---
+*🔍 Búsquedas y Consultas*
+---
+*Comando:* \`!pat [patente]\`
+_Pa' qué sirve: Te busco los datos de un vehículo por su patente._
+
+*Comando:* \`!tne [rut]\`
+_Pa' qué sirve: Pa' cachar en qué está tu pase escolar._
+
+*Comando:* \`!num [número]\`
+_Pa' qué sirve: Te sapeo la info de un número de celular._
+
+*Comando:* \`!wiki [búsqueda]\`
+_Pa' qué sirve: Un resumen de Wikipedia, pa' no quedar como ignorante._
+
+*Comando:* \`!g [búsqueda]\`
+_Pa' qué sirve: Una búsqueda en Google, más rápido que la cresta._
+
+---
+*🌐 Herramientas de Red*
+---
+*Comando:* \`!net [dominio o IP]\`
+_Pa' qué sirve: Te da un análisis completo (WHOIS, DNS, GeoIP) de un sitio web._
+
+*Comando:* \`!nic [dominio.cl]\`
+_Pa' qué sirve: Busca la info de un dominio .cl directamente en NIC Chile._
+
+---
+*🎉 Diversión y Webeo*
+---
+*Comando:* \`!s\`
+_Pa' qué sirve: Responde a una imagen/gif/video con \`!s\` y te hago un sticker al toque._
+
+*Comando:* \`!audios\`
+_Pa' qué sirve: La lista de todos los audios pa' mandar la talla._
+
+*Comando:* \`!chiste\`
+_Pa' qué sirve: Te mando un chiste en audio, a ver si te reí._
+
+*Comando:* \`!18\` o \`!navidad\`
+_Pa' qué sirve: Pa' cachar cuánto falta pa'l manso carrete._
+
+*Comando:* \`!ayuda [frase]\`
+_Pa' qué sirve: Si andai perdido, tira ayuda y te oriento con el comando que necesitai._
+
+*Comando:* \`!ping\`
+_Pa' qué sirve: Revisa el estado y la velocidad del bot._
+    `.trim();
+}
+
+// --- OTRAS FUNCIONES DE UTILIDAD (SIN CAMBIOS) ---
+
 async function handleFeriados() {
     try {
         const response = await axios.get('https://www.feriadosapp.com/api/laws.json');
         const feriados = response.data.data;
         const today = moment();
-        let replyMessage = '🥳 Próximos 5 feriados en Chile:\n\n';
+        let replyMessage = '🥳 Próximos 5 feriados en Chilito:\n\n';
         let count = 0;
 
         for (const feriado of feriados) {
@@ -22,17 +136,17 @@ async function handleFeriados() {
                 count++;
             }
         }
-        return count > 0 ? replyMessage : 'No se encontraron próximos feriados por ahora.';
+        return count > 0 ? replyMessage : 'Ucha, parece que no quedan feriados. A puro trabajar no más, compa.';
     } catch (error) {
         console.error('Error al obtener los feriados:', error.message);
-        return 'Ocurrió un error al obtener los feriados.';
+        return 'Sorry, se cayó la weá de los feriados.';
     }
 }
 
 async function handleFarmacias(message) {
     const city = message.body.toLowerCase().replace(/!far|\/far/g, '').trim();
     if (!city) {
-        return 'Debes especificar una comuna. Por ejemplo: `!far santiago`';
+        return 'Pone la comuna po, wn. Por ejemplo: `!far santiago`';
     }
 
     try {
@@ -41,10 +155,10 @@ async function handleFarmacias(message) {
         const filteredFarmacias = farmacias.filter(f => f.comuna_nombre.toLowerCase().includes(city));
 
         if (filteredFarmacias.length === 0) {
-            return `No se encontraron farmacias de turno en ${city}.`;
+            return `No pillé farmacias de turno en ${city}, compa.`;
         }
 
-        let replyMessage = `🏥 Farmacias de turno encontradas en *${city.charAt(0).toUpperCase() + city.slice(1)}*:\n\n`;
+        let replyMessage = `🏥 Estas son las farmacias de turno que pillé en *${city.charAt(0).toUpperCase() + city.slice(1)}*:\n\n`;
         filteredFarmacias.slice(0, 5).forEach(f => {
             replyMessage += `*${f.local_nombre}*\n`;
             replyMessage += `Dirección: ${f.local_direccion}\n`;
@@ -53,14 +167,14 @@ async function handleFarmacias(message) {
         return replyMessage.trim();
     } catch (error) {
         console.error('Error al obtener las farmacias:', error.message);
-        return 'Ocurrió un error al obtener las farmacias.';
+        return 'Ucha, se cayó el sistema de las farmacias.';
     }
 }
 
 async function handleClima(message) {
     const city = message.body.substring(message.body.indexOf(' ') + 1).trim();
     if (!city) {
-        return "Debes indicar una ciudad. Ejemplo: `!clima santiago`";
+        return "Ya po, dime la ciudad. Ej: `!clima arica`";
     }
 
     try {
@@ -81,27 +195,27 @@ async function handleClima(message) {
         const location = data.location;
 
         const reply = `
-🌤️ *Clima en ${location.name}, ${location.region}*
+🌤️ *El tiempo en ${location.name}, ${location.region}*
 
-- *Ahora:* ${current.temp_c}°C, ${current.condition.text}
-- *Sensación Térmica:* ${current.feelslike_c}°C
+- *Ahora mismo:* ${current.temp_c}°C, ${current.condition.text}
+- *Se siente como:* ${current.feelslike_c}°C
 - *Viento:* ${current.wind_kph} km/h
 - *Humedad:* ${current.humidity}%
 
-- *Máx/Mín hoy:* ${forecast.maxtemp_c}°C / ${forecast.mintemp_c}°C
-- *Posibilidad de lluvia:* ${forecast.daily_chance_of_rain}%
+- *Hoy (Máx/Mín):* ${forecast.maxtemp_c}°C / ${forecast.mintemp_c}°C
+- *¿Llueve?:* ${forecast.daily_chance_of_rain}% de prob.
         `.trim();
         return reply;
     } catch (error) {
         console.error("Error al obtener el clima de WeatherAPI:", error.response?.data?.error?.message || error.message);
-        return `No pude encontrar el clima para "${city}".`;
+        return `Ucha, no pillé el clima pa' "${city}", sorry.`;
     }
 }
 
 async function handleSismos() {
     try {
         const response = await axios.get('https://api.gael.cloud/general/public/sismos');
-        let reply = '🌋 *Últimos 5 sismos en Chile:*\n\n';
+        let reply = '🌋 *Los últimos 5 temblores en Chilito:*\n\n';
         
         response.data.slice(0, 5).forEach(sismo => {
             const fecha = moment(sismo.Fecha).tz('America/Santiago').format('DD/MM/YYYY HH:mm');
@@ -113,14 +227,14 @@ async function handleSismos() {
         return reply;
     } catch (error) {
         console.error("Error al obtener sismos:", error);
-        return "No pude obtener la información de los sismos.";
+        return "No pude cachar los temblores, wn.";
     }
 }
 
 async function handleBus(message, client) {
     const paradero = message.body.substring(message.body.indexOf(' ') + 1).trim().toUpperCase();
     if (!paradero) {
-        return client.sendMessage(message.from, "Debes indicar el código del paradero. Ejemplo: `!bus PA433`");
+        return client.sendMessage(message.from, "Tírame el código del paradero po. Ej: `!bus PA433`");
     }
 
     await message.react('⏳');
@@ -133,7 +247,7 @@ async function handleBus(message, client) {
         await page.waitForSelector('.nombre-parada', { timeout: 15000 });
         const nombreParadero = await page.$eval('.nombre-parada', el => el.textContent.trim());
 
-        let reply = `🚌 Próximas llegadas al paradero *${nombreParadero} (${paradero})*:\n\n`;
+        let reply = `🚌 *Paradero ${nombreParadero} (${paradero})*:\n\n`;
         const services = await page.$$eval('#tabla-servicios-paradero tbody tr', rows => 
             rows.map(row => {
                 const cells = row.querySelectorAll('td');
@@ -148,13 +262,13 @@ async function handleBus(message, client) {
 
         if (services.length === 0) {
             await browser.close();
-            return client.sendMessage(message.from, `No hay próximos servicios para el paradero *${paradero}*.`);
+            return client.sendMessage(message.from, `No viene ninguna micro pa'l paradero *${paradero}*.`);
         }
 
         services.forEach(s => {
-            reply += `*Servicio ${s.servicio}* (a ${s.destino})\n`;
-            reply += `  - Próximo: ${s.llegadas[0]}\n`;
-            reply += `  - Siguiente: ${s.llegadas[1]}\n\n`;
+            reply += `*Micro ${s.servicio}* (va pa' ${s.destino})\n`;
+            reply += `  - Llega en: ${s.llegadas[0]}\n`;
+            reply += `  - La siguiente: ${s.llegadas[1]}\n\n`;
         });
         
         await browser.close();
@@ -165,74 +279,19 @@ async function handleBus(message, client) {
         console.error("Error con Puppeteer en !bus:", error);
         if (browser) await browser.close();
         await message.react('❌');
-        return client.sendMessage(message.from, `No se pudo obtener la información para el paradero *${paradero}*.`);
+        return client.sendMessage(message.from, `No pude cachar la info del paradero *${paradero}*. A lo mejor pusiste mal el código.`);
     }
 }
 
-// --- Lógica para !sec (CORREGIDA Y SIMPLIFICADA) ---
 async function handleSec(message) {
     const command = message.body.toLowerCase().split(' ')[0];
     let region = null;
-
-    // Si el comando es específicamente !secrm o /secrm, asignamos la región.
     if (command === '!secrm' || command === '/secrm') {
         region = 'Metropolitana';
     }
-    
-    // Si el comando es solo '!sec' o '/sec', la región queda como null y busca a nivel nacional.
     return generateWhatsAppMessage(region);
 }
 
-// --- Lógica para !menu (CORREGIDA) ---
-function handleMenu() {
-    return `
-📜 *Comandos disponibles* 📜
-
-🌤️ *Clima*
-   \`!clima [ciudad]\`
-    
-💰 *Finanzas*
-   \`!valores\`
-    
-🥳 *Feriados*
-   \`!feriados\`, \`!18\`, \`!navidad\`
-    
-🏥 *Farmacias de Turno*
-   \`!far [comuna]\`
-    
-⚽ *Fútbol Chileno*
-   \`!tabla\` o \`!ligatabla\`
-   \`!prox\` o \`!ligapartidos\`
-    
-🇨🇱 *Selección Chilena*
-   \`!tclasi\` o \`!selecciontabla\`
-   \`!clasi\` o \`!seleccionpartidos\`
-    
-� *Metro de Santiago*
-   \`!metro\`
-    
-🔍 *Búsquedas*
-   \`!pat [patente]\`
-   \`!wiki [término]\`
-   \`!g [término]\`
-    
-🤖 *Crear Sticker*
-   Responde \`!s\` a una imagen/gif/video
-    
-🎵 *Audios*
-   \`!audios\` o \`!sonidos\` para la lista
-    
-🌋 *Info Geográfica*
-   \`!sismos\`
-   \`!bus [código_paradero]\`
-    
-💡 *Suministro Eléctrico*
-   \`!sec\` (Nacional) o \`!secrm\` (RM)
-    
-🇨🇱 *Otros*
-   \`!ping\`
-    `.trim();
-}
 
 module.exports = { 
     handleFeriados,
