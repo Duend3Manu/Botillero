@@ -14,6 +14,7 @@ const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require
 const bannerService = require('../services/banner.service.js');
 const textoService = require('../services/texto.service.js');
 const networkService = require('../services/network.service.js');
+const utilityService = require('../services/utility.service.js');
 
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');
@@ -112,7 +113,7 @@ async function commandHandler(client, message) {
 
         // --- Handlers ---
         case 'ping': replyMessage = await handlePing(message); break;
-        case 'feriados': replyMessage = await handleFeriados(); break;
+        case 'feriados':replyMessage = await utilityService.getFeriados();break;
         case 'far': replyMessage = await handleFarmacias(message); break;
         case 'clima': replyMessage = await handleClima(message); break;
         case 'sismos': replyMessage = await handleSismos(); break;
