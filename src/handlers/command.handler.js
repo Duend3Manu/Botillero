@@ -1,4 +1,4 @@
-// src/handlers/command.handler.js (VERSIÓN FINAL Y 100% UNIFICADA)
+// src/handlers/command.handler.js
 "use strict";
 
 const { MessageMedia } = require('whatsapp-web.js');
@@ -13,6 +13,7 @@ const messagingService = require('../services/messaging.service.js');
 const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require('../services/league.service.js');
 const bannerService = require('../services/banner.service.js');
 const textoService = require('../services/texto.service.js');
+const networkService = require('../services/network.service.js');
 
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');
@@ -129,19 +130,25 @@ async function commandHandler(client, message) {
         case 'caso': case 'ecaso': case 'icaso': replyMessage = await handleCaso(message); break;
         case 'ayuda': replyMessage = await handleAiHelp(message); break;
         case 'num': case 'tel': return handlePhoneSearch(client, message);
-        case 'tne': case 'pase': return handleTneSearch(message);
         case 'id':
             console.log('ID de este chat:', message.from);
             message.reply(`ℹ️ El ID de este chat es:\n${message.from}`);
             break;
         
-        // --- COMANDOS DE RED (AÑADIDOS) ---
-        case 'whois':
+        // --- COMANDOS DE RED  ---
+
         case 'net':
-            replyMessage = await handleNetworkQuery(message);
-            break;
-        case 'nic':
-            replyMessage = await handleNicClSearch(message);
+        case 'whois': // <-- Ambos comandos ejecutan la misma lógica
+            const domainToAnalyze = message.body.split(' ')[1];
+            if (!domainToAnalyze) {
+                return message.reply("Por favor, dame un dominio o IP para analizar. Ej: `!net google.com`");
+            }
+            // Usamos el mensaje de carga que ya creamos
+            messagingService.sendLoadingMessage(message); 
+            // Llamamos al nuevo servicio de red
+            const analysisResult = await networkService.analyzeDomain(domainToAnalyze);
+            // Enviamos el resultado final
+            client.sendMessage(message.from, analysisResult);
             break;
     
         case 'banner':
