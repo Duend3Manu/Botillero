@@ -10,6 +10,7 @@
     "qrcode-terminal": "^0.12.0",
     "sqlite3": "^5.1.7",
     "systeminformation": "^5.27.7",
-    "whatsapp-web.js": "^1.31.0"
+    "whatsapp-web.js": "^1.31.0",
+    "whois": "^2.15.0"
   }
 }

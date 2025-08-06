@@ -2,7 +2,7 @@
 "use strict";
 
 const { MessageMedia } = require('whatsapp-web.js');
-
+const fs = require('fs');
 // --- Importaciones de Servicios (Python) ---
 const metroService = require('../services/metro.service');
 const nationalTeamService = require('../services/nationalTeam.service');
@@ -11,6 +11,7 @@ const horoscopeService = require('../services/horoscope.service');
 const externalService = require('../services/external.service');
 const messagingService = require('../services/messaging.service.js');
 const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require('../services/league.service.js');
+const bannerService = require('../services/banner.service.js');
 
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');
@@ -142,6 +143,28 @@ async function commandHandler(client, message) {
             replyMessage = await handleNicClSearch(message);
             break;
     
+        case 'banner':
+            const args = message.body.split(' ');
+            if (args.length < 3) {
+                return message.reply("Formato incorrecto. Usa: `!banner <estilo> <texto>`.\n\nEstilos disponibles: `vengadores`, `shrek`, `mario`, `nintendo`, `sega`, `potter`, `starwars`, `cocacola`, `disney`, `stranger`.");
+            }
+
+            const style = args[1];
+            const text = args.slice(2).join(' ');
+
+            try {
+                message.reply(`Creando tu banner estilo *${style}*... ✨`);
+                const bannerPath = await bannerService.createBanner(style, text);
+
+                const bannerMedia = MessageMedia.fromFilePath(bannerPath);
+                await client.sendMessage(message.from, bannerMedia, { sendMediaAsSticker: true }); // Lo enviamos como sticker
+
+                fs.unlinkSync(bannerPath); // Borramos el archivo temporal
+            } catch (error) {
+                // Si el script de Python nos dio un mensaje de error, lo mostramos
+                message.reply(`Hubo un error: ${error.message}`);
+            }
+            break;
         default: break;
     }
 

@@ -8,6 +8,7 @@ const axios = require('axios');
 
 const lookup = util.promisify(whois.lookup);
 
+// --- Función para !net (WHOIS genérico) ---
 async function getWhoisInfo(query) {
     try {
         const rawData = await lookup(query);
@@ -92,6 +93,13 @@ async function handleNetworkQuery(message) {
 
     await message.react('⏳');
     
+    // Si es un dominio .cl, hacemos la consulta a NIC.cl automáticamente
+    if (query.endsWith('.cl')) {
+        // Llamamos a handleNicClSearch, que ahora maneja su propia respuesta al usuario
+        return handleNicClSearch(message);
+    }
+
+    // Para otros dominios, usamos el flujo normal
     const [whoisInfo, dnsInfo] = await Promise.all([
         getWhoisInfo(query),
         getDnsInfo(query)
@@ -121,6 +129,8 @@ async function handleNetworkQuery(message) {
     return finalResponse.trim();
 }
 
+
+// --- Función para !nic (CORREGIDA Y MÁS ROBUSTA) ---
 async function handleNicClSearch(message) {
     let domain = message.body.substring(message.body.indexOf(' ') + 1).trim().toLowerCase();
     if (!domain) {
@@ -178,9 +188,16 @@ ${parsedData['Servidores de Nombre'].map(ns => `- \`${ns}\``).join('\n')}
     } catch (error) {
         console.error("Error en handleNicClSearch:", error);
         await message.react('❌');
+
+        // Mensaje específico para el error de conexión
+        if (error.code === 'ECONNRESET') {
+            return `😕 La conexión con el servidor de NIC.cl fue interrumpida. Esto suele ser un problema temporal del servidor de ellos. Por favor, intenta de nuevo en un minuto.`;
+        }
+        
         return `No se pudo encontrar información para *${domain}*.`;
     }
 }
+
 
 module.exports = {
     handleNetworkQuery,
