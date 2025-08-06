@@ -12,6 +12,7 @@ const externalService = require('../services/external.service');
 const messagingService = require('../services/messaging.service.js');
 const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require('../services/league.service.js');
 const bannerService = require('../services/banner.service.js');
+const textoService = require('../services/texto.service.js');
 
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');

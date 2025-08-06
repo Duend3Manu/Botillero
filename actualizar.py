@@ -23,6 +23,7 @@ ejecutar(
     "-e .wwebjs_auth/ "
     "-e .wwebjs_auth/session "
     "-e .wwebjs_cache/"
+    "-e .env"
 )
 
 print("✅ Proyecto renovado, bibliotecas intactas, sesión protegida 🐾✨")

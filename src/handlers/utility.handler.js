@@ -1,11 +1,11 @@
-// src/handlers/utility.handler.js
+// src/handlers/utility.handler.js (Versión con menú actualizado)
 "use strict";
 
 const axios = require('axios');
 const moment = require('moment-timezone');
 const puppeteer = require('puppeteer');
-const config = require('../config');
-const { generateWhatsAppMessage } = require('../utils/secService');
+const config = require('../config'); // Asumo que tienes este archivo de configuración
+const { generateWhatsAppMessage } = require('../utils/secService'); // Asumo que tienes este servicio
 
 // --- Lógica para !menu (ACTUALIZADA) ---
 function handleMenu() {
@@ -16,37 +16,52 @@ Aquí tení la lista actualizada de todas las weás que cacho hacer.
 _Usa \`!\` o \`/\` pa' los comandos, da lo mismo._
 
 ---
+*🎨 Edición de Imágenes (¡NUEVO!)*
+---
+*Comando:* \`!s\`
+_Pa' qué sirve: Responde a una imagen/gif/video y te hago un sticker al toque._
+
+*Comando:* \`!meme [texto arriba] - [texto abajo]\`
+_Pa' qué sirve: Responde a una imagen pa' crear un meme clásico._
+
+*Comando:* \`!banner [estilo] [texto]\`
+_Pa' qué sirve: Crea un banner con el estilo de Shrek, Mario, etc._
+
+*Comando:* \`!texto [texto arriba] - [texto abajo]\`
+_Pa' qué sirve: Le pone texto semi-transparente a una imagen._
+
+---
 *⚙️ Pa'l Día a Día*
 ---
 *Comando:* \`!clima [ciudad]\`
-_Pa' qué sirve: Te tiro el pronóstico del tiempo pa' la ciudad que querai._
+_Pa' qué sirve: Te tiro el pronóstico del tiempo._
 
 *Comando:* \`!sismos\`
-_Pa' qué sirve: Te sapeo los últimos 5 temblores que han habido en Chilito._
+_Pa' qué sirve: Te sapeo los últimos 5 temblores._
 
 *Comando:* \`!far [comuna]\`
-_Pa' qué sirve: Te digo qué farmacia está de turno en tu comuna._
+_Pa' qué sirve: Te digo qué farmacia está de turno._
 
 *Comando:* \`!metro\`
-_Pa' qué sirve: Pa' cachar cómo anda el metro de Santiago en tiempo real._
+_Pa' qué sirve: Pa' cachar cómo anda el metro de Santiago._
 
 *Comando:* \`!bus [código_paradero]\`
-_Pa' qué sirve: Te digo en cuánto pasa la micro, al toque._
+_Pa' qué sirve: Te digo en cuánto pasa la micro._
 
 *Comando:* \`!sec\` o \`!secrm\`
-_Pa' qué sirve: Pa' cachar si se cortó la luz a nivel nacional o solo en la RM._
+_Pa' qué sirve: Pa' cachar si se cortó la luz._
 
 *Comando:* \`!feriados\`
-_Pa' qué sirve: Te muestra los próximos feriados, pa' saber cuándo no se trabaja._
+_Pa' qué sirve: Te muestra los próximos feriados._
 
 ---
 *💰 Finanzas y Servicios*
 ---
 *Comando:* \`!valores\`
-_Pa' qué sirve: Te canto los indicadores económicos del día (Dólar, UF, etc.)._
+_Pa' qué sirve: Te canto los indicadores económicos del día._
 
 *Comando:* \`!bolsa\`
-_Pa' qué sirve: Un resumen de cómo anda la bolsa de comercio._
+_Pa' qué sirve: Un resumen de cómo anda la bolsa._
 
 *Comando:* \`!trstatus\`
 _Pa' qué sirve: Revisa el estado de los servicios de Transbank._
@@ -58,7 +73,7 @@ _Pa' qué sirve: Revisa el estado de los servicios de Transbank._
 _Pa' qué sirve: La tabla de posiciones de la liga chilena._
 
 *Comando:* \`!prox\`
-_Pa' qué sirve: Los próximos partidos de la fecha del campeonato._
+_Pa' qué sirve: Los próximos partidos de la fecha._
 
 *Comando:* \`!partidos\`
 _Pa' qué sirve: Un resumen de los partidos del día._
@@ -67,13 +82,13 @@ _Pa' qué sirve: Un resumen de los partidos del día._
 _Pa' qué sirve: Cómo va la Roja en las clasificatorias._
 
 *Comando:* \`!clasi\`
-_Pa' qué sirve: Los próximos partidos de la selección chilena._
+_Pa' qué sirve: Los próximos partidos de la selección._
 
 ---
 *🔍 Búsquedas y Consultas*
 ---
 *Comando:* \`!pat [patente]\`
-_Pa' qué sirve: Te busco los datos de un vehículo por su patente._
+_Pa' qué sirve: Te busco los datos de un vehículo._
 
 *Comando:* \`!tne [rut]\`
 _Pa' qué sirve: Pa' cachar en qué está tu pase escolar._
@@ -82,37 +97,31 @@ _Pa' qué sirve: Pa' cachar en qué está tu pase escolar._
 _Pa' qué sirve: Te sapeo la info de un número de celular._
 
 *Comando:* \`!wiki [búsqueda]\`
-_Pa' qué sirve: Un resumen de Wikipedia, pa' no quedar como ignorante._
+_Pa' qué sirve: Un resumen de Wikipedia._
 
 *Comando:* \`!g [búsqueda]\`
-_Pa' qué sirve: Una búsqueda en Google, más rápido que la cresta._
+_Pa' qué sirve: Una búsqueda en Google._
 
----
-*🌐 Herramientas de Red*
----
+*Comando:* \`!resumen [URL]\`
+_Pa' qué sirve: Te resume una noticia desde un enlace._
+
 *Comando:* \`!net [dominio o IP]\`
-_Pa' qué sirve: Te da un análisis completo (WHOIS, DNS, GeoIP) de un sitio web._
-
-*Comando:* \`!nic [dominio.cl]\`
-_Pa' qué sirve: Busca la info de un dominio .cl directamente en NIC Chile._
+_Pa' qué sirve: Te da un análisis completo de un sitio web._
 
 ---
 *🎉 Diversión y Webeo*
 ---
-*Comando:* \`!s\`
-_Pa' qué sirve: Responde a una imagen/gif/video con \`!s\` y te hago un sticker al toque._
-
 *Comando:* \`!audios\`
 _Pa' qué sirve: La lista de todos los audios pa' mandar la talla._
 
 *Comando:* \`!chiste\`
-_Pa' qué sirve: Te mando un chiste en audio, a ver si te reí._
+_Pa' qué sirve: Te mando un chiste en audio._
 
 *Comando:* \`!18\` o \`!navidad\`
 _Pa' qué sirve: Pa' cachar cuánto falta pa'l manso carrete._
 
 *Comando:* \`!ayuda [frase]\`
-_Pa' qué sirve: Si andai perdido, tira ayuda y te oriento con el comando que necesitai._
+_Pa' qué sirve: Si andai perdido, tira ayuda y te oriento._
 
 *Comando:* \`!ping\`
 _Pa' qué sirve: Revisa el estado y la velocidad del bot._
@@ -291,7 +300,6 @@ async function handleSec(message) {
     }
     return generateWhatsAppMessage(region);
 }
-
 
 module.exports = { 
     handleFeriados,

@@ -20,7 +20,7 @@ def agregar_texto_transparente(ruta_imagen, texto_arriba, texto_abajo):
         font = ImageFont.truetype(ruta_fuente, tamaño_fuente)
         
         # Color del texto: blanco con ~70% de opacidad (180 de 255)
-        color_texto = (255, 255, 255, 180)
+        color_texto = (255, 255, 255, 230)
 
         # --- Dibujar Texto de Arriba ---
         lineas_arriba = textwrap.wrap(texto_arriba, width=25)

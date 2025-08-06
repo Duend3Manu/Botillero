@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-print("🚀 Script 'subir_a_github_v3.py' iniciado...\n")
+print("🚀 Script 'subir_a_github.py' iniciado...\n")
 
 # 🔐 Limpia index.lock si existe
 lock_path = '.git/index.lock'
@@ -11,17 +11,43 @@ if os.path.exists(lock_path):
     print("✅ Bloqueo eliminado.\n")
 
 # 🧭 Verifica si el remoto 'origin' está configurado
-remotes = subprocess.check_output("git remote", shell=True).decode()
+try:
+    remotes = subprocess.check_output("git remote", shell=True).decode()
+except subprocess.CalledProcessError:
+    print("❌ Error al verificar remotos. ¿Estás en un repo Git?\n")
+    exit()
+
 if "origin" not in remotes:
     print("❌ No encontré un remoto llamado 'origin'. Agregalo con:")
     print("   git remote add origin https://github.com/Duend3Manu/Botillero.git\n")
     exit()
 
+# 🧹 Limpia archivos ignorados que estén siendo trackeados
+def limpiar_archivos_ignorados():
+    try:
+        ignorados = subprocess.check_output("git ls-files -i --exclude-standard", shell=True).decode().splitlines()
+        for archivo in ignorados:
+            subprocess.run(f"git rm --cached \"{archivo}\"", shell=True)
+            print(f"🧹 Removido del índice: {archivo}")
+    except subprocess.CalledProcessError:
+        print("⚠️ No se pudo limpiar archivos ignorados.\n")
+
+limpiar_archivos_ignorados()
+
 # 📦 Agrega todos los archivos
-subprocess.run("git add --all", shell=True)
+try:
+    subprocess.run("git add --all", shell=True, check=True)
+except subprocess.CalledProcessError:
+    print("❌ Error al agregar archivos. Revisa si hay archivos bloqueados o con permisos restringidos.\n")
+    exit()
 
 # 🧾 Revisa si hay algo para comitear
-status_output = subprocess.check_output("git status", shell=True).decode()
+try:
+    status_output = subprocess.check_output("git status", shell=True).decode()
+except subprocess.CalledProcessError:
+    print("❌ Error al obtener el estado del repo.\n")
+    exit()
+
 if "Changes to be committed" not in status_output:
     print("⚠️ No hay cambios para comitear. Nada que subir.\n")
     exit()
@@ -46,6 +72,9 @@ if conflicto_detectado():
     print("   - git rebase --abort   ← para cancelar y volver al estado anterior")
     print("   - git reset --hard origin/main ← si querés reemplazar todo por lo remoto\n")
     exit()
+
+# (Eliminada la definición duplicada de limpiar_archivos_ignorados)
+
 
 # ✍️ Mensaje de commit
 commit_message = input("📝 Escribí el mensaje del commit: ").strip()
