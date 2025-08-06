@@ -13,7 +13,6 @@ ESTILOS = {
     "sega": {"fuente": "Sega.TTF", "color_relleno": (0, 133, 198), "color_borde": (255, 255, 255)},
     "potter": {"fuente": "HarryP.TTF", "color_relleno": (240, 240, 240), "color_borde": (50, 50, 50)},
     "starwars": {"fuente": "Star.ttf", "color_relleno": (255, 232, 31), "color_borde": (0, 0, 0)},
-    "cocacola": {"fuente": "cocacola.ttf", "color_relleno": (255, 255, 255), "color_borde": (237, 22, 42)},
     "disney": {"fuente": "Disney.ttf", "color_relleno": (255, 255, 255), "color_borde": (25, 67, 119)},
     # "pixel": {"fuente": "Pixel.ttf", "color_relleno": (255, 255, 255), "color_borde": (0, 0, 0)} # Si quieres usar pixel, descomenta y usa el comando !banner pixel
 }

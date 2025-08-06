@@ -146,7 +146,7 @@ async function commandHandler(client, message) {
         case 'banner':
             const args = message.body.split(' ');
             if (args.length < 3) {
-                return message.reply("Formato incorrecto. Usa: `!banner <estilo> <texto>`.\n\nEstilos disponibles: `vengadores`, `shrek`, `mario`, `nintendo`, `sega`, `potter`, `starwars`, `cocacola`, `disney`, `stranger`.");
+                return message.reply("Formato incorrecto. Usa: `!banner <estilo> <texto>`.\n\nEstilos disponibles: `vengadores`, `shrek`, `mario`, `nintendo`, `sega`, `potter`, `starwars`,`disney`, `stranger`.");
             }
 
             const style = args[1];
