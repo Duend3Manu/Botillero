@@ -137,20 +137,40 @@ async function commandHandler(client, message) {
         
         // --- COMANDOS DE RED  ---
 
-        case 'net':
-        case 'whois': // <-- Ambos comandos ejecutan la misma lógica
+case 'net':
+        case 'whois':
             const domainToAnalyze = message.body.split(' ')[1];
             if (!domainToAnalyze) {
                 return message.reply("Por favor, dame un dominio o IP para analizar. Ej: `!net google.com`");
             }
-            // Usamos el mensaje de carga que ya creamos
+
             messagingService.sendLoadingMessage(message); 
-            // Llamamos al nuevo servicio de red
-            const analysisResult = await networkService.analyzeDomain(domainToAnalyze);
-            // Enviamos el resultado final
-            client.sendMessage(message.from, analysisResult);
+            const fullResult = await networkService.analyzeDomain(domainToAnalyze);
+
+            // Dividimos la respuesta del script de Python usando nuestro delimitador
+            const [messageText, filePath] = fullResult.split('|||FILE_PATH|||');
+
+            // 1. Enviamos el mensaje de texto normal al chat
+            await client.sendMessage(message.from, messageText.trim());
+
+            // 2. Si se creó una ruta de archivo, lo enviamos
+            if (filePath && filePath.trim()) {
+                const cleanFilePath = filePath.trim();
+                const fileMedia = MessageMedia.fromFilePath(cleanFilePath);
+                await client.sendMessage(message.from, fileMedia);
+
+                // 3. Programamos la eliminación del archivo para 15 segundos después
+                setTimeout(() => {
+                    try {
+                        fs.unlinkSync(cleanFilePath);
+                        console.log(`(Limpieza) -> Archivo temporal ${cleanFilePath} eliminado.`);
+                    } catch (err) {
+                        console.error(`(Limpieza) -> Error al eliminar el archivo temporal: ${err.message}`);
+                    }
+                }, 15000); // 15000 milisegundos = 15 segundos
+            }
             break;
-    
+            
         case 'banner':
             const args = message.body.split(' ');
             if (args.length < 3) {
