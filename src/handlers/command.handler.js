@@ -157,12 +157,54 @@ async function commandHandler(client, message) {
                 const bannerPath = await bannerService.createBanner(style, text);
 
                 const bannerMedia = MessageMedia.fromFilePath(bannerPath);
-                await client.sendMessage(message.from, bannerMedia, { sendMediaAsSticker: true }); // Lo enviamos como sticker
+                await client.sendMessage(message.from, bannerMedia);
 
                 fs.unlinkSync(bannerPath); // Borramos el archivo temporal
             } catch (error) {
                 // Si el script de Python nos dio un mensaje de error, lo mostramos
                 message.reply(`Hubo un error: ${error.message}`);
+            }
+            break;
+        case 'texto':
+            let imageMsg_texto = null;
+            if (message.hasMedia) {
+                imageMsg_texto = message;
+            } else if (message.hasQuotedMsg) {
+                const quotedMsg = await message.getQuotedMessage();
+                if (quotedMsg.hasMedia) {
+                    imageMsg_texto = quotedMsg;
+                }
+            }
+
+            if (!imageMsg_texto) {
+                return message.reply("Para agregar texto, envía una imagen con el comando en el comentario, o responde a una imagen.");
+            }
+
+            const textoCompleto = message.body.substring(message.body.indexOf(' ') + 1);
+            if (!textoCompleto.includes('-')) {
+                return message.reply("Formato incorrecto. Usa: `!texto texto arriba - texto abajo`");
+            }
+
+            const [textoArriba, textoAbajo] = textoCompleto.split('-').map(t => t.trim());
+
+            try {
+                const media = await imageMsg_texto.downloadMedia();
+                if (media) {
+                    const tempImagePath = `./temp_texto_${Date.now()}.${media.mimetype.split('/')[1] || 'jpeg'}`;
+                    fs.writeFileSync(tempImagePath, Buffer.from(media.data, 'base64'));
+
+                    message.reply("Añadiendo texto a tu imagen... ✍️");
+                    const finalImagePath = await textoService.addTextToImage(tempImagePath, textoArriba, textoAbajo);
+
+                    const finalMedia = MessageMedia.fromFilePath(finalImagePath);
+                    await client.sendMessage(message.from, finalMedia);
+
+                    fs.unlinkSync(tempImagePath);
+                    fs.unlinkSync(finalImagePath);
+                }
+            } catch (error) {
+                console.error(error);
+                message.reply("Hubo un error al procesar la imagen. 😔");
             }
             break;
         default: break;
