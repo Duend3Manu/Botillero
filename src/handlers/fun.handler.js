@@ -39,7 +39,7 @@ const soundMap = {
     'aweonao': { file: 'aweonao.mp3', reaction: '😂' },'mpenca': { file: 'muypenca.mp3', reaction: '😂' }, 
     'penca': { file: 'penca.mp3', reaction: '😂' },'yamete': { file: 'Yamete.mp3', reaction: '😂' }, 
     'doler': { file: 'doler.mp3', reaction: '😂' },'dolor': { file: 'doler.mp3', reaction: '🏳️‍🌈' }, 
-    'tigre': { file: 'Tigre.mp3', reaction: '🐯' },
+    'tigre': { file: 'Tigre.mp3', reaction: '🐯' },'comunista1': { file: 'comunista1.mp3', reaction: '😂' },
     'promo': { file: 'Promo.mp3', reaction: '😂' }, 'rata': { file: 'Rata.mp3', reaction: '🐁' },
     'rata2': { file: 'rata2.mp3', reaction: '🐁' }, 'caballo': { file: 'caballo.mp3', reaction: '🏳️‍🌈' },
     'romeo': { file: 'romeo.mp3', reaction: '😂' }, 'idea': { file: 'idea.mp3', reaction: '😂' },
@@ -74,7 +74,7 @@ const soundMap = {
     'tomar': { file: 'Tomar.mp3', reaction: '😂' }, 'macabeo': { file: 'Macabeo.mp3', reaction: '😂' },
     'piscola': { file: 'Piscola.mp3', reaction: '😂' }, 'tomar2': { file: 'Notomar.mp3', reaction: '😂' },
     'venganza': { file: 'Venganza.mp3', reaction: '😂' }, 'weko': { file: 'weko.mp3', reaction: '🏳️‍🌈' },
-    'himnoe': { file: 'urssespañol.mp3', reaction: '🇷🇺' }
+    'himnoe': { file: 'urssespañol.mp3', reaction: '🇷🇺' } ,'comunista2': { file: 'comunista2.mp3', reaction: '😂' },
 };
 
 const soundList = Object.keys(soundMap);
