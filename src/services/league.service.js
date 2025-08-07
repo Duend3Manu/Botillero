@@ -1,16 +1,14 @@
-// src/services/league.service.js (VERSIÓN FINAL Y CORRECTA)
+// src/services/league.service.js (Versión con codificación corregida)
 "use strict";
 
 const path = require('path');
 const { spawn } = require('child_process');
 
-// Ruta a la carpeta donde guardas tus scripts de Python
 const SCRIPTS_PATH = path.join(__dirname, '..', '..', 'scripts', 'python');
-// Comando para ejecutar Python (usualmente 'python' o 'python3')
 const PYTHON_EXECUTABLE = 'python'; 
 
 /**
- * Función genérica para ejecutar cualquier script de Python y devolver su salida.
+ * Función genérica para ejecutar cualquier script de Python.
  * @param {string} scriptName El nombre del archivo .py a ejecutar.
  * @returns {Promise<string>} La salida del script.
  */
@@ -22,12 +20,13 @@ function executePythonScript(scriptName) {
         let output = '';
         let errorOutput = '';
 
+        // CAMBIO CLAVE: Le decimos que lea la salida como 'utf8'
         pythonProcess.stdout.on('data', (data) => {
-            output += data.toString();
+            output += data.toString('utf8');
         });
 
         pythonProcess.stderr.on('data', (data) => {
-            errorOutput += data.toString();
+            errorOutput += data.toString('utf8');
         });
 
         pythonProcess.on('close', (code) => {
@@ -53,7 +52,6 @@ async function getLeagueUpcomingMatches() {
     return await executePythonScript('proxpar.py');
 }
 
-// --- NUEVA FUNCIÓN PARA !partidos ---
 async function getMatchDaySummary() {
     console.log(`(Servicio) -> Ejecutando partidos.py...`);
     return await executePythonScript('partidos.py');
@@ -62,5 +60,5 @@ async function getMatchDaySummary() {
 module.exports = {
     getLeagueTable,
     getLeagueUpcomingMatches,
-    getMatchDaySummary // Exportamos la nueva función junto a las antiguas
+    getMatchDaySummary
 };
