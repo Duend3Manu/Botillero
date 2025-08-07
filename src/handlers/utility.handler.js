@@ -129,36 +129,6 @@ _Pa' qué sirve: Revisa el estado y la velocidad del bot._
 }
 
 // --- OTRAS FUNCIONES DE UTILIDAD (SIN CAMBIOS) ---
-
-async function handleFeriados() {
-    try {
-        // 1. CAMBIO: Usamos una API de feriados más directa y confiable
-        const response = await axios.get('https://api.gael.cloud/general/public/feriados');
-        const feriados = response.data;
-        const today = moment().startOf('day'); // Usamos el inicio del día para una comparación precisa
-        
-        let replyMessage = '🥳 *Próximos 5 feriados en Chilito:*\n\n';
-        let count = 0;
-
-        for (const feriado of feriados) {
-            const feriadoDate = moment(feriado.date);
-            
-            // 2. CAMBIO: Usamos isSameOrAfter para incluir los feriados de hoy
-            if (feriadoDate.isSameOrAfter(today, 'day') && count < 5) {
-                // Formateamos la fecha para que salga en español
-                const formattedDate = feriadoDate.locale('es').format('dddd DD [de] MMMM');
-                replyMessage += `- *${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)}:* ${feriado.title}\n`;
-                count++;
-            }
-        }
-        
-        return count > 0 ? replyMessage.trim() : 'Ucha, parece que no quedan feriados este año. A puro trabajar no más, compa.';
-    } catch (error) {
-        console.error('Error al obtener los feriados:', error.message);
-        return 'Sorry, se cayó la weá de los feriados.';
-    }
-}
-
 async function handleFarmacias(message) {
     const city = message.body.toLowerCase().replace(/!far|\/far/g, '').trim();
     if (!city) {
