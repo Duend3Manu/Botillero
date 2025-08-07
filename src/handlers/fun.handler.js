@@ -31,14 +31,15 @@ async function handleSticker(client, message) {
 
 // --- Lógica para Sonidos ---
 const soundMap = {
-    'mataron': { file: 'mataron.mp3', reaction: '😂' }, 'muerte': { file: 'muerte.mp3', reaction: '😂' },
-    'muerte2': { file: 'muerte2.mp3', reaction: '😂' }, 'muerte3': { file: 'muerte3.mp3', reaction: '😂' },
-    'muerte4': { file: 'muerte4.mp3', reaction: '😂' }, 'neme': { file: 'neme.mp3', reaction: '🏳️‍🌈' },
-    'risa': { file: 'merio.mp3', reaction: '😂' }, 'watona': { file: 'watona.mp3', reaction: '😂' },
-    'himno': { file: 'urss.mp3', reaction: '🇷🇺' }, 'aweonao': { file: 'aweonao.mp3', reaction: '😂' },
-    'mpenca': { file: 'muypenca.mp3', reaction: '😂' }, 'penca': { file: 'penca.mp3', reaction: '😂' },
-    'yamete': { file: 'Yamete.mp3', reaction: '😂' }, 'doler': { file: 'doler.mp3', reaction: '😂' },
-    'dolor': { file: 'doler.mp3', reaction: '🏳️‍🌈' }, 'tigre': { file: 'Tigre.mp3', reaction: '🐯' },
+    'mujerentera': { file: 'mujer.mp3', reaction: '🥵' },'mataron': { file: 'mataron.mp3', reaction: '😂' }, 
+    'muerte': { file: 'muerte.mp3', reaction: '😂' },'muerte2': { file: 'muerte2.mp3', reaction: '😂' }, 
+    'muerte3': { file: 'muerte3.mp3', reaction: '😂' },'muerte4': { file: 'muerte4.mp3', reaction: '😂' }, 
+    'neme': { file: 'neme.mp3', reaction: '🏳️‍🌈' },'risa': { file: 'merio.mp3', reaction: '😂' }, 
+    'watona': { file: 'watona.mp3', reaction: '😂' },'himno': { file: 'urss.mp3', reaction: '🇷🇺' }, 
+    'aweonao': { file: 'aweonao.mp3', reaction: '😂' },'mpenca': { file: 'muypenca.mp3', reaction: '😂' }, 
+    'penca': { file: 'penca.mp3', reaction: '😂' },'yamete': { file: 'Yamete.mp3', reaction: '😂' }, 
+    'doler': { file: 'doler.mp3', reaction: '😂' },'dolor': { file: 'doler.mp3', reaction: '🏳️‍🌈' }, 
+    'tigre': { file: 'Tigre.mp3', reaction: '🐯' },
     'promo': { file: 'Promo.mp3', reaction: '😂' }, 'rata': { file: 'Rata.mp3', reaction: '🐁' },
     'rata2': { file: 'rata2.mp3', reaction: '🐁' }, 'caballo': { file: 'caballo.mp3', reaction: '🏳️‍🌈' },
     'romeo': { file: 'romeo.mp3', reaction: '😂' }, 'idea': { file: 'idea.mp3', reaction: '😂' },
