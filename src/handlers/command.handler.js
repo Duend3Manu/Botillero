@@ -83,7 +83,34 @@ async function commandHandler(client, message) {
             break;
 
         // Random //
+// En command.handler.js, dentro del switch
 
+    case 'random':
+        try {
+            messagingService.sendLoadingMessage(message);
+            const randomInfo = await utilityService.getRandomInfo();
+
+            console.log("[DEBUG command.handler] Información recibida del servicio:", randomInfo);
+
+            if (typeof randomInfo === 'object' && randomInfo.type === 'image') {
+                console.log("[DEBUG command.handler] Detectado tipo 'image'. Intentando enviar media...");
+                const media = await MessageMedia.fromUrl(randomInfo.url, { unsafeMime: true });
+                await client.sendMessage(message.from, media, { caption: randomInfo.caption });
+                console.log("[DEBUG command.handler] Media enviada con éxito.");
+            } else if (typeof randomInfo === 'string' && randomInfo) {
+                console.log("[DEBUG command.handler] Detectado tipo 'string'. Intentando enviar texto...");
+                await client.sendMessage(message.from, randomInfo);
+                console.log("[DEBUG command.handler] Texto enviado con éxito.");
+            } else {
+                console.log("[DEBUG command.handler] La información recibida está vacía o en un formato no reconocido.");
+                // Opcional: enviar un mensaje de error al usuario
+                // await message.reply("No pude obtener un dato aleatorio, intenta de nuevo.");
+            }
+        } catch (error) {
+            console.error("[DEBUG command.handler] Ocurrió un error CATASTRÓFICO en el comando !random:", error);
+            await message.reply("Ucha, algo se rompió feo con el comando !random. Revisa la consola.");
+        }
+        break;
         // En command.handler.js, dentro del switch
 
     case 'random':
