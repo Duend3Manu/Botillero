@@ -25,7 +25,7 @@ if "origin" not in remotes:
 # 🧹 Limpia archivos ignorados que estén siendo trackeados
 def limpiar_archivos_ignorados():
     try:
-        ignorados = subprocess.check_output("git ls-files -i --exclude-standard", shell=True).decode().splitlines()
+        ignorados = subprocess.check_output(["git", "ls-files", "-i", "--exclude-standard"]).decode().splitlines()
         for archivo in ignorados:
             subprocess.run(f"git rm --cached \"{archivo}\"", shell=True)
             print(f"🧹 Removido del índice: {archivo}")

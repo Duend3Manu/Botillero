@@ -1,0 +1,22 @@
+[
+  {
+    "termino": "API",
+    "definicion": "(Application Programming Interface) Es un conjunto de reglas que permite que diferentes programas se comuniquen entre sí. Es como el menú de un restaurante que le permite al cliente pedir platos sin saber cómo se cocinan."
+  },
+  {
+    "termino": "Kernel",
+    "definicion": "Es el núcleo de un sistema operativo. Es la parte fundamental que gestiona los recursos del hardware y permite que el software se comunice con el hardware. Es el verdadero 'jefe' de tu computador."
+  },
+  {
+    "termino": "Scraping",
+    "definicion": "Es una técnica para extraer información de sitios web de forma automatizada. Es lo que hace nuestro bot para obtener la cartelera del cine o los feriados, actuando como un 'lector' súper rápido."
+  },
+  {
+    "termino": "Git",
+    "definicion": "Es un sistema de control de versiones. Permite a los programadores llevar un registro de todos los cambios en su código, volver a versiones anteriores y colaborar en equipo sin pisarse el trabajo. GitHub es la plataforma más famosa que usa Git."
+  },
+  {
+    "termino": "Open Source",
+    "definicion": "(Código Abierto) Se refiere al software cuyo código fuente está disponible para que cualquiera lo vea, modifique y distribuya. Fomenta la colaboración y la transparencia. ¡Tu bot es un proyecto de este tipo!"
+  }
+]

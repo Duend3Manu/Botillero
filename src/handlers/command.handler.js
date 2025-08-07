@@ -82,6 +82,23 @@ async function commandHandler(client, message) {
             client.sendMessage(message.from, metroStatus);
             break;
 
+        // Random //
+
+case 'random':
+    messagingService.sendLoadingMessage(message);
+    const randomInfo = await utilityService.getRandomInfo();
+
+    // Si la respuesta es un objeto (el cómic), lo manejamos como imagen
+    if (typeof randomInfo === 'object' && randomInfo.type === 'image') {
+        const media = await MessageMedia.fromUrl(randomInfo.url, { unsafeMime: true });
+        client.sendMessage(message.from, media, { caption: randomInfo.caption });
+    } 
+    // Si no, es texto normal
+    else {
+        client.sendMessage(message.from, randomInfo);
+    }
+    break;
+
         // --- Otros Servicios (Python) ---
         case 'tclasi': case 'selecciontabla': replyMessage = await nationalTeamService.getQualifiersTable(); break;
         case 'clasi': case 'seleccionpartidos': replyMessage = await nationalTeamService.getQualifiersMatches(); break;
