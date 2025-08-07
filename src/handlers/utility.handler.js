@@ -279,7 +279,6 @@ async function handleSec(message) {
 }
 
 module.exports = { 
-    handleFeriados,
     handleFarmacias,
     handleClima,
     handleSismos,
