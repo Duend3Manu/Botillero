@@ -135,7 +135,7 @@ function handleCountdown(command) {
     const year = moment().year();
     switch (command) {
         case '18':
-            return getCountdownMessage(moment.tz(`${year}-09-18 00:00:00`, 'America/Santiago'), 'el 18', '�🇱');
+            return getCountdownMessage(moment.tz(`${year}-09-18 00:00:00`, 'America/Santiago'), 'el 18', '🇨🇱 🍻 🥩 🍷🍾');
         case 'navidad':
             return getCountdownMessage(moment.tz(`${year}-12-25 00:00:00`, 'America/Santiago'), 'Navidad', '🎅');
         case 'añonuevo':
