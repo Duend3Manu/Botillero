@@ -29,17 +29,52 @@ async function handleSticker(client, message) {
     }
 }
 
+// --- NUEVA FUNCIÓN: Convertir Sticker a Imagen/GIF ---
+/**
+ * Convierte un sticker (estático o animado) de vuelta a una imagen o GIF.
+ * @param {import('whatsapp-web.js').Client} client - El objeto del cliente de WhatsApp.
+ * @param {import('whatsapp-web.js').Message} message - El objeto del mensaje que activó el comando.
+ */
+async function handleStickerToMedia(client, message) {
+    // Verificamos si el usuario está respondiendo a un mensaje
+    if (!message.hasQuotedMsg) {
+        return message.reply("Para usar este comando, debes responder a un sticker.");
+    }
+
+    const quotedMsg = await message.getQuotedMessage();
+
+    // Verificamos si el mensaje citado es efectivamente un sticker
+    if (quotedMsg.hasMedia && quotedMsg.type === 'sticker') {
+        await message.react('⏳');
+        try {
+            // Descargamos el contenido del sticker
+            const media = await quotedMsg.downloadMedia();
+            
+            // Enviamos el contenido de vuelta. WhatsApp lo renderizará como imagen o gif.
+            await client.sendMessage(message.from, media, { caption: "¡Aquí tienes!" });
+            await message.react('✅');
+
+        } catch (e) {
+            console.error("Error al convertir sticker a media:", e);
+            await message.react('❌');
+            message.reply("Ucha, no pude convertir ese sticker. ¿Estás seguro de que no es muy antiguo?");
+        }
+    } else {
+        message.reply("Eso no parece ser un sticker. Por favor, responde a un sticker para convertirlo.");
+    }
+}
+
+
 // --- Lógica para Sonidos ---
 const soundMap = {
-    'mujerentera': { file: 'mujer.mp3', reaction: '🥵' },'mataron': { file: 'mataron.mp3', reaction: '😂' }, 
-    'muerte': { file: 'muerte.mp3', reaction: '😂' },'muerte2': { file: 'muerte2.mp3', reaction: '😂' }, 
-    'muerte3': { file: 'muerte3.mp3', reaction: '😂' },'muerte4': { file: 'muerte4.mp3', reaction: '😂' }, 
-    'neme': { file: 'neme.mp3', reaction: '🏳️‍🌈' },'risa': { file: 'merio.mp3', reaction: '😂' }, 
-    'watona': { file: 'watona.mp3', reaction: '😂' },'himno': { file: 'urss.mp3', reaction: '🇷🇺' }, 
-    'aweonao': { file: 'aweonao.mp3', reaction: '😂' },'mpenca': { file: 'muypenca.mp3', reaction: '😂' }, 
-    'penca': { file: 'penca.mp3', reaction: '😂' },'yamete': { file: 'Yamete.mp3', reaction: '😂' }, 
-    'doler': { file: 'doler.mp3', reaction: '😂' },'dolor': { file: 'doler.mp3', reaction: '🏳️‍🌈' }, 
-    'tigre': { file: 'Tigre.mp3', reaction: '🐯' },'comunista1': { file: 'comunista1.mp3', reaction: '😂' },
+    'mataron': { file: 'mataron.mp3', reaction: '😂' }, 'muerte': { file: 'muerte.mp3', reaction: '😂' },
+    'muerte2': { file: 'muerte2.mp3', reaction: '😂' }, 'muerte3': { file: 'muerte3.mp3', reaction: '😂' },
+    'muerte4': { file: 'muerte4.mp3', reaction: '😂' }, 'neme': { file: 'neme.mp3', reaction: '🏳️‍🌈' },
+    'risa': { file: 'merio.mp3', reaction: '😂' }, 'watona': { file: 'watona.mp3', reaction: '😂' },
+    'himno': { file: 'urss.mp3', reaction: '🇷🇺' }, 'aweonao': { file: 'aweonao.mp3', reaction: '😂' },
+    'mpenca': { file: 'muypenca.mp3', reaction: '😂' }, 'penca': { file: 'penca.mp3', reaction: '😂' },
+    'yamete': { file: 'Yamete.mp3', reaction: '😂' }, 'doler': { file: 'doler.mp3', reaction: '😂' },
+    'dolor': { file: 'doler.mp3', reaction: '🏳️‍🌈' }, 'tigre': { file: 'Tigre.mp3', reaction: '🐯' },
     'promo': { file: 'Promo.mp3', reaction: '😂' }, 'rata': { file: 'Rata.mp3', reaction: '🐁' },
     'rata2': { file: 'rata2.mp3', reaction: '🐁' }, 'caballo': { file: 'caballo.mp3', reaction: '🏳️‍🌈' },
     'romeo': { file: 'romeo.mp3', reaction: '😂' }, 'idea': { file: 'idea.mp3', reaction: '😂' },
@@ -74,7 +109,7 @@ const soundMap = {
     'tomar': { file: 'Tomar.mp3', reaction: '😂' }, 'macabeo': { file: 'Macabeo.mp3', reaction: '😂' },
     'piscola': { file: 'Piscola.mp3', reaction: '😂' }, 'tomar2': { file: 'Notomar.mp3', reaction: '😂' },
     'venganza': { file: 'Venganza.mp3', reaction: '😂' }, 'weko': { file: 'weko.mp3', reaction: '🏳️‍🌈' },
-    'himnoe': { file: 'urssespañol.mp3', reaction: '🇷🇺' } ,'comunista2': { file: 'comunista2.mp3', reaction: '😂' },
+    'himnoe': { file: 'urssespañol.mp3', reaction: '🇷🇺' }
 };
 
 const soundList = Object.keys(soundMap);
@@ -136,7 +171,7 @@ function handleCountdown(command) {
     const year = moment().year();
     switch (command) {
         case '18':
-            return getCountdownMessage(moment.tz(`${year}-09-18 00:00:00`, 'America/Santiago'), 'el 18', '🇨🇱 🍻 🥩 🍷🍾');
+            return getCountdownMessage(moment.tz(`${year}-09-18 00:00:00`, 'America/Santiago'), 'el 18', '🇨🇱');
         case 'navidad':
             return getCountdownMessage(moment.tz(`${year}-12-25 00:00:00`, 'America/Santiago'), 'Navidad', '🎅');
         case 'añonuevo':
@@ -240,6 +275,7 @@ async function handleOnce(client, message) {
 
 module.exports = {
     handleSticker,
+    handleStickerToMedia, // <-- Exportamos la nueva función
     handleSound,
     getSoundCommands,
     handleAudioList,
