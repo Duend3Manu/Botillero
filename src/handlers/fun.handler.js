@@ -1,10 +1,10 @@
-// src/handlers/fun.handler.js
 "use strict";
 
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
 const { MessageMedia } = require('whatsapp-web.js');
+const sharp = require('sharp'); // Asegúrate de haberlo instalado con: npm install sharp
 
 // --- Lógica para Stickers ---
 async function handleSticker(client, message) {
@@ -29,9 +29,9 @@ async function handleSticker(client, message) {
     }
 }
 
-// --- NUEVA FUNCIÓN: Convertir Sticker a Imagen/GIF ---
+// --- FUNCIÓN ACTUALIZADA: Convertir Sticker a Imagen/GIF con Sharp ---
 /**
- * Convierte un sticker (estático o animado) de vuelta a una imagen o GIF.
+ * Convierte un sticker (estático o animado) de vuelta a una imagen (PNG) o GIF.
  * @param {import('whatsapp-web.js').Client} client - El objeto del cliente de WhatsApp.
  * @param {import('whatsapp-web.js').Message} message - El objeto del mensaje que activó el comando.
  */
@@ -42,22 +42,48 @@ async function handleStickerToMedia(client, message) {
 
     const quotedMsg = await message.getQuotedMessage();
 
-    if (quotedMsg.hasMedia && quotedMsg.type === 'sticker') {
-        await message.react('⏳');
-        try {
-            const media = await quotedMsg.downloadMedia();
-            
-            // Usamos message.reply para que la imagen/gif sea una respuesta directa
-            await message.reply(media, undefined, { caption: "¡Aquí tienes!" });
-            await message.react('✅');
+    if (!quotedMsg.hasMedia || quotedMsg.type !== 'sticker') {
+        return message.reply("Eso no parece ser un sticker. Por favor, responde a un sticker para convertirlo.");
+    }
 
-        } catch (e) {
-            console.error("Error al convertir sticker a media:", e);
-            await message.react('❌');
-            message.reply("Ucha, no pude convertir ese sticker. ¿Estás seguro de que no es muy antiguo?");
+    await message.react('⏳');
+    const tempDir = path.join(__dirname, '..', '..', 'temp'); // Carpeta temporal en la raíz del proyecto
+    fs.mkdirSync(tempDir, { recursive: true });
+    
+    let outputPath; // Variable para guardar la ruta del archivo de salida
+
+    try {
+        const media = await quotedMsg.downloadMedia();
+        const inputBuffer = Buffer.from(media.data, 'base64');
+
+        if (quotedMsg.isAnimated) {
+            // Es un sticker animado, lo convertimos a GIF
+            outputPath = path.join(tempDir, `sticker_${Date.now()}.gif`);
+            await sharp(inputBuffer, { animated: true }).gif().toFile(outputPath);
+        } else {
+            // Es un sticker estático, lo convertimos a PNG
+            outputPath = path.join(tempDir, `sticker_${Date.now()}.png`);
+            await sharp(inputBuffer).png().toFile(outputPath);
         }
-    } else {
-        message.reply("Eso no parece ser un sticker. Por favor, responde a un sticker para convertirlo.");
+
+        // Si la conversión fue exitosa, enviamos el archivo
+        if (fs.existsSync(outputPath)) {
+            const mediaToSend = MessageMedia.fromFilePath(outputPath);
+            await message.reply(mediaToSend, undefined, { caption: "¡Aquí tienes!" });
+            await message.react('✅');
+        } else {
+            throw new Error('La conversión no generó un archivo de salida.');
+        }
+
+    } catch (e) {
+        console.error("Error al convertir sticker a media:", e);
+        await message.react('❌');
+        message.reply("Ucha, no pude convertir ese sticker. Puede que el formato no sea compatible.");
+    } finally {
+        // Limpieza: eliminamos el archivo temporal después de enviarlo
+        if (outputPath && fs.existsSync(outputPath)) {
+            fs.unlinkSync(outputPath);
+        }
     }
 }
 
@@ -197,7 +223,7 @@ const frases = {
     15: 'Voy a sacar mi caja de risa. Dame un momento... cric cric cric ♫ja ja ja ja jaaaa♫',
     16: 'Meruane estaría orgulloso de ti. ¡Sigues haciendo reír! 😄',
     17: 'Jajajaja, ya llegó el payaso al grupo, avisa para la otra. 😄',
-    18: '♫♫♫♫ Yo tomo licor, yo tomo cerveza � Y me gustan las chicas y la cumbia me divierte y me excita.. ♫♫♫♫♫',
+    18: '♫♫♫♫ Yo tomo licor, yo tomo cerveza  Y me gustan las chicas y la cumbia me divierte y me excita.. ♫♫♫♫♫',
     19: 'A cantar: ♫♫♫ Yoooo tomo vino y cerveza 🍺 (Pisco y ron) para olvidarme de ella (Maraca culia), Tomo y me pongo loco (hasta los cocos), Loco de la cabeza (Esta cabeza) ♫♫♫',
     20: '♫♫♫ Me fui pal baile y me emborraché,miré una chica y me enamoré,era tan bella, era tan bella,la quería comer ♫♫♫',
     21: 'Compa, ¿qué le parece esa morra?, La que anda bailando sola, me gusta pa mí, Bella, ella sabe que está buena , Que todos andan mirándola cómo baila ♫♫♫♫♫♫',
@@ -272,7 +298,7 @@ async function handleOnce(client, message) {
 
 module.exports = {
     handleSticker,
-    handleStickerToMedia, // <-- Exportamos la nueva función
+    handleStickerToMedia,
     handleSound,
     getSoundCommands,
     handleAudioList,
