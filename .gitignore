@@ -1,5 +1,4 @@
 node_modules/
-.env
 .wwebjs_auth/*
 !.wwebjs_auth/.gitignore
 .wwebjs_auth/session
