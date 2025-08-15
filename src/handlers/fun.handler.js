@@ -36,22 +36,19 @@ async function handleSticker(client, message) {
  * @param {import('whatsapp-web.js').Message} message - El objeto del mensaje que activó el comando.
  */
 async function handleStickerToMedia(client, message) {
-    // Verificamos si el usuario está respondiendo a un mensaje
     if (!message.hasQuotedMsg) {
         return message.reply("Para usar este comando, debes responder a un sticker.");
     }
 
     const quotedMsg = await message.getQuotedMessage();
 
-    // Verificamos si el mensaje citado es efectivamente un sticker
     if (quotedMsg.hasMedia && quotedMsg.type === 'sticker') {
         await message.react('⏳');
         try {
-            // Descargamos el contenido del sticker
             const media = await quotedMsg.downloadMedia();
             
-            // Enviamos el contenido de vuelta. WhatsApp lo renderizará como imagen o gif.
-            await client.sendMessage(message.from, media, { caption: "¡Aquí tienes!" });
+            // Usamos message.reply para que la imagen/gif sea una respuesta directa
+            await message.reply(media, undefined, { caption: "¡Aquí tienes!" });
             await message.react('✅');
 
         } catch (e) {
@@ -200,7 +197,7 @@ const frases = {
     15: 'Voy a sacar mi caja de risa. Dame un momento... cric cric cric ♫ja ja ja ja jaaaa♫',
     16: 'Meruane estaría orgulloso de ti. ¡Sigues haciendo reír! 😄',
     17: 'Jajajaja, ya llegó el payaso al grupo, avisa para la otra. 😄',
-    18: '♫♫♫♫ Yo tomo licor, yo tomo cerveza 🍻 Y me gustan las chicas y la cumbia me divierte y me excita.. ♫♫♫♫♫',
+    18: '♫♫♫♫ Yo tomo licor, yo tomo cerveza � Y me gustan las chicas y la cumbia me divierte y me excita.. ♫♫♫♫♫',
     19: 'A cantar: ♫♫♫ Yoooo tomo vino y cerveza 🍺 (Pisco y ron) para olvidarme de ella (Maraca culia), Tomo y me pongo loco (hasta los cocos), Loco de la cabeza (Esta cabeza) ♫♫♫',
     20: '♫♫♫ Me fui pal baile y me emborraché,miré una chica y me enamoré,era tan bella, era tan bella,la quería comer ♫♫♫',
     21: 'Compa, ¿qué le parece esa morra?, La que anda bailando sola, me gusta pa mí, Bella, ella sabe que está buena , Que todos andan mirándola cómo baila ♫♫♫♫♫♫',

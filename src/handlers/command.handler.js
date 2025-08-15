@@ -1,8 +1,9 @@
-// src/handlers/command.handler.js
+// src/handlers/command.handler.js (VERSIÓN FINAL Y 100% UNIFICADA)
 "use strict";
 
 const { MessageMedia } = require('whatsapp-web.js');
 const fs = require('fs');
+
 // --- Importaciones de Servicios (Python) ---
 const metroService = require('../services/metro.service');
 const nationalTeamService = require('../services/nationalTeam.service');
@@ -15,21 +16,11 @@ const bannerService = require('../services/banner.service.js');
 const textoService = require('../services/texto.service.js');
 const networkService = require('../services/network.service.js');
 const utilityService = require('../services/utility.service.js');
-const { 
-    handleSticker, 
-    handleStickerToMedia, 
-    handleSound, 
-    getSoundCommands, 
-    handleAudioList, 
-    handleJoke, 
-    handleCountdown, 
-    handleBotMention, 
-    handleOnce 
-} = require('./fun.handler');
 
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');
 const { handleFeriados, handleFarmacias, handleClima, handleSismos, handleBus, handleSec, handleMenu } = require('./utility.handler');
+const { handleSticker, handleStickerToMedia, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce } = require('./fun.handler');
 const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler');
 const { handleTicket, handleCaso } = require('./stateful.handler');
 const { handleAiHelp } = require('./ai.handler');
@@ -269,7 +260,9 @@ async function commandHandler(client, message) {
         }
 
         if (replyMessage) {
-            message.reply(replyMessage);
+            // Para los comandos que devuelven texto, los enviamos desde el chat principal
+            // para mantener la consistencia, en lugar de como una respuesta.
+            client.sendMessage(message.from, replyMessage);
         }
     } catch (err) {
         console.error("[command.handler] Error inesperado:", err);
