@@ -305,7 +305,7 @@ async function handleOnce(client, message) {
 // --- NUEVA LÓGICA PARA LA RULETA ---
 
 const DB_PATH = path.join(__dirname, '..', '..', 'database', 'puntos.json');
-const COOLDOWN_SECONDS = 300; // 5 minutos de espera entre tiradas
+const COOLDOWN_SECONDS = 15; // 5 minutos de espera entre tiradas
 
 // Función para leer la base de datos de puntos
 function leerPuntos() {
