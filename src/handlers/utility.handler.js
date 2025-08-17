@@ -1,134 +1,78 @@
-// src/handlers/utility.handler.js (Versión con menú actualizado)
 "use strict";
 
 const axios = require('axios');
 const moment = require('moment-timezone');
 const puppeteer = require('puppeteer');
-const config = require('../config'); // Asumo que tienes este archivo de configuración
-const { generateWhatsAppMessage } = require('../utils/secService'); // Asumo que tienes este servicio
+const config = require('../config');
+const { generateWhatsAppMessage } = require('../utils/secService');
 
-// --- Lógica para !menu (ACTUALIZADA) ---
+// --- ESTRUCTURA DE COMANDOS PARA EL MENÚ DINÁMICO ---
+// Ahora, para añadir o quitar un comando del menú, solo tienes que editar esta sección.
+const menuConfig = {
+    "UTILIDAD": [
+        { cmd: "!ping", desc: "Mide la latencia del bot." },
+        { cmd: "!metro", desc: "Estado de la red de Metro." },
+        { cmd: "!feriados", desc: "Muestra los próximos feriados." },
+        { cmd: "!far <comuna>", desc: "Farmacias de turno." },
+        { cmd: "!clima <ciudad>", desc: "El tiempo en tu ciudad." },
+        { cmd: "!sismos", desc: "Últimos sismos en Chile." },
+        { cmd: "!bus <paradero>", desc: "Próximas llegadas de buses." },
+        { cmd: "!sec", desc: "Reclamos por cortes de luz." },
+        { cmd: "!valores", desc: "Indicadores económicos." },
+        { cmd: "!bencina <comuna>", desc: "Bencineras más baratas." },
+        { cmd: "!horoscopo <signo>", desc: "Tu horóscopo diario." },
+        { cmd: "!trstatus", desc: "Estado del traductor de DeepL." },
+        { cmd: "!bolsa", desc: "Estado de la bolsa de Santiago." }
+    ],
+    "FÚTBOL": [
+        { cmd: "!tabla", desc: "Tabla de posiciones del torneo nacional." },
+        { cmd: "!prox", desc: "Próximos partidos del torneo." },
+        { cmd: "!partidos", desc: "Partidos de la fecha actual." },
+        { cmd: "!tclasi", desc: "Tabla de clasificatorias." },
+        { cmd: "!clasi", desc: "Partidos de clasificatorias." }
+    ],
+    "BÚSQUEDA": [
+        { cmd: "!wiki <búsqueda>", desc: "Busca en Wikipedia." },
+        { cmd: "!noticias", desc: "Noticias más recientes." },
+        { cmd: "!g <búsqueda>", desc: "Búsqueda rápida en Google." }
+    ],
+    "ENTRETENCIÓN": [
+        { cmd: "!s", desc: "Crea un sticker (respondiendo a imagen/video)." },
+        { cmd: "!toimg", desc: "Convierte un sticker a imagen/gif." },
+        { cmd: "!chiste", desc: "Te cuento un chiste en audio." },
+        { cmd: "!audios", desc: "Lista de comandos de audio." },
+        { cmd: "!banner <estilo> <texto>", desc: "Crea un banner." },
+        { cmd: "!texto <arriba> - <abajo>", desc: "Añade texto a una imagen." },
+        { cmd: "!18, !navidad, !añonuevo", desc: "Cuenta regresiva." }
+    ],
+    "JUEGOS": [
+        { cmd: "!ruleta", desc: "Gira la ruleta y gana puntos." },
+        { cmd: "!puntos", desc: "Muestra tus puntos acumulados." }
+    ],
+    "OTROS": [
+        { cmd: "!ayuda <pregunta>", desc: "Pregúntale a la IA." },
+        { cmd: "!ticket", desc: "Crea un ticket de soporte." },
+        { cmd: "!caso <número>", desc: "Revisa el estado de un ticket." },
+        { cmd: "!id", desc: "Muestra el ID del chat." }
+    ]
+};
+
+// --- FUNCIÓN DE MENÚ MEJORADA ---
 function handleMenu() {
-    return `
-🤖 *¡Wena! Soy Botillero, tu asistente.* 🤖
+    let menu = "*🤖 MENÚ DE COMANDOS BOTILLERO 🤖*\n\n";
 
-Aquí tení la lista actualizada de todas las weás que cacho hacer.
-_Usa \`!\` o \`/\` pa' los comandos, da lo mismo._
-
----
-*🎨 Edición de Imágenes (¡NUEVO!)*
----
-*Comando:* \`!s\`
-_Pa' qué sirve: Responde a una imagen/gif/video y te hago un sticker al toque._
-
-*Comando:* \`!meme [texto arriba] - [texto abajo]\`
-_Pa' qué sirve: Responde a una imagen pa' crear un meme clásico._
-
-*Comando:* \`!banner [estilo] [texto]\`
-_Pa' qué sirve: Crea un banner con el estilo de Shrek, Mario, etc._
-
-*Comando:* \`!texto [texto arriba] - [texto abajo]\`
-_Pa' qué sirve: Le pone texto semi-transparente a una imagen._
-
----
-*⚙️ Pa'l Día a Día*
----
-*Comando:* \`!clima [ciudad]\`
-_Pa' qué sirve: Te tiro el pronóstico del tiempo._
-
-*Comando:* \`!sismos\`
-_Pa' qué sirve: Te sapeo los últimos 5 temblores._
-
-*Comando:* \`!far [comuna]\`
-_Pa' qué sirve: Te digo qué farmacia está de turno._
-
-*Comando:* \`!metro\`
-_Pa' qué sirve: Pa' cachar cómo anda el metro de Santiago._
-
-*Comando:* \`!bus [código_paradero]\`
-_Pa' qué sirve: Te digo en cuánto pasa la micro._
-
-*Comando:* \`!sec\` o \`!secrm\`
-_Pa' qué sirve: Pa' cachar si se cortó la luz._
-
-*Comando:* \`!feriados\`
-_Pa' qué sirve: Te muestra los próximos feriados._
-
----
-*💰 Finanzas y Servicios*
----
-*Comando:* \`!valores\`
-_Pa' qué sirve: Te canto los indicadores económicos del día._
-
-*Comando:* \`!bolsa\`
-_Pa' qué sirve: Un resumen de cómo anda la bolsa._
-
-*Comando:* \`!trstatus\`
-_Pa' qué sirve: Revisa el estado de los servicios de Transbank._
-
----
-*⚽ La Pelotita*
----
-*Comando:* \`!tabla\`
-_Pa' qué sirve: La tabla de posiciones de la liga chilena._
-
-*Comando:* \`!prox\`
-_Pa' qué sirve: Los próximos partidos de la fecha._
-
-*Comando:* \`!partidos\`
-_Pa' qué sirve: Un resumen de los partidos del día._
-
-*Comando:* \`!tclasi\`
-_Pa' qué sirve: Cómo va la Roja en las clasificatorias._
-
-*Comando:* \`!clasi\`
-_Pa' qué sirve: Los próximos partidos de la selección._
-
----
-*🔍 Búsquedas y Consultas*
----
-*Comando:* \`!pat [patente]\`
-_Pa' qué sirve: Te busco los datos de un vehículo._
-
-*Comando:* \`!tne [rut]\`
-_Pa' qué sirve: Pa' cachar en qué está tu pase escolar._
-
-*Comando:* \`!num [número]\`
-_Pa' qué sirve: Te sapeo la info de un número de celular._
-
-*Comando:* \`!wiki [búsqueda]\`
-_Pa' qué sirve: Un resumen de Wikipedia._
-
-*Comando:* \`!g [búsqueda]\`
-_Pa' qué sirve: Una búsqueda en Google._
-
-*Comando:* \`!resumen [URL]\`
-_Pa' qué sirve: Te resume una noticia desde un enlace._
-
-*Comando:* \`!net [dominio o IP]\`
-_Pa' qué sirve: Te da un análisis completo de un sitio web._
-
----
-*🎉 Diversión y Webeo*
----
-*Comando:* \`!audios\`
-_Pa' qué sirve: La lista de todos los audios pa' mandar la talla._
-
-*Comando:* \`!chiste\`
-_Pa' qué sirve: Te mando un chiste en audio._
-
-*Comando:* \`!18\` o \`!navidad\`
-_Pa' qué sirve: Pa' cachar cuánto falta pa'l manso carrete._
-
-*Comando:* \`!ayuda [frase]\`
-_Pa' qué sirve: Si andai perdido, tira ayuda y te oriento._
-
-*Comando:* \`!ping\`
-_Pa' qué sirve: Revisa el estado y la velocidad del bot._
-    `.trim();
+    for (const categoria in menuConfig) {
+        menu += `*--- ${categoria} ---*\n`;
+        menuConfig[categoria].forEach(item => {
+            menu += `*${item.cmd}* - ${item.desc}\n`;
+        });
+        menu += "\n"; // Añade un espacio entre categorías
+    }
+    return menu.trim();
 }
 
-// --- OTRAS FUNCIONES DE UTILIDAD (SIN CAMBIOS) ---
+// --- FUNCIONES DE LOS COMANDOS (LÓGICA ORIGINAL RESTAURADA) ---
+
 async function handleFarmacias(message) {
     const city = message.body.toLowerCase().replace(/!far|\/far/g, '').trim();
     if (!city) {
