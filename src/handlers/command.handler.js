@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
 const { MessageMedia } = require('whatsapp-web.js');
-const sharp = require('sharp'); // Asegúrate de haberlo instalado con: npm install sharp
+// Se elimina 'sharp' de las importaciones principales para evitar un fallo total si no está instalado.
 
 // --- Lógica para Stickers ---
 async function handleSticker(client, message) {
@@ -29,13 +29,25 @@ async function handleSticker(client, message) {
     }
 }
 
-// --- FUNCIÓN REVISADA: Convertir Sticker a Imagen/GIF con Sharp ---
+// --- FUNCIÓN CORREGIDA: Convertir Sticker a Imagen/GIF con carga segura ---
 /**
  * Convierte un sticker (estático o animado) de vuelta a una imagen (PNG) o GIF.
  * @param {import('whatsapp-web.js').Client} client - El objeto del cliente de WhatsApp.
  * @param {import('whatsapp-web.js').Message} message - El objeto del mensaje que activó el comando.
  */
 async function handleStickerToMedia(client, message) {
+    let sharp;
+    try {
+        // Se carga la librería 'sharp' solo cuando se ejecuta este comando.
+        sharp = require('sharp');
+    } catch (err) {
+        console.error("----------- ERROR CRÍTICO: FALTA LA LIBRERÍA 'SHARP' -----------");
+        console.error("La librería 'sharp' no se pudo cargar. Es probable que no se haya instalado correctamente.");
+        console.error("Por favor, detén el bot y ejecuta 'npm install sharp' en tu terminal y luego reinícialo.");
+        console.error(err);
+        return message.reply("❌ Error: La función para convertir imágenes no está disponible. El administrador debe instalar la librería 'sharp'.");
+    }
+
     if (!message.hasQuotedMsg) {
         return message.reply("Para usar este comando, debes responder a un sticker.");
     }
@@ -75,7 +87,6 @@ async function handleStickerToMedia(client, message) {
 
         console.log("(StickerToMedia) -> Conversión completada. Verificando archivo...");
 
-        // Verificamos que el archivo de salida exista y no esté vacío
         if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 0) {
             console.log("(StickerToMedia) -> Archivo verificado. Enviando respuesta...");
             const mediaToSend = MessageMedia.fromFilePath(outputPath);
@@ -93,7 +104,6 @@ async function handleStickerToMedia(client, message) {
         await message.react('❌');
         message.reply("Ucha, no pude convertir ese sticker. Revisa la consola para ver el error.");
     } finally {
-        // Limpieza: eliminamos el archivo temporal después de enviarlo
         if (outputPath && fs.existsSync(outputPath)) {
             try {
                 fs.unlinkSync(outputPath);
@@ -239,7 +249,7 @@ const frases = {
     13: 'El humor está de moda, y tú eres el líder. 😄👑',
     14: 'Con ese humor, podrías competir en el festival de Viña del Mar. 🎤😄',
     15: 'Voy a sacar mi caja de risa. Dame un momento... cric cric cric ♫ja ja ja ja jaaaa♫',
-    16: 'Meruane estaría orgulloso de ti. ¡Sigues haciendo reír! �',
+    16: 'Meruane estaría orgulloso de ti. ¡Sigues haciendo reír! 😄',
     17: 'Jajajaja, ya llegó el payaso al grupo, avisa para la otra. 😄',
     18: '♫♫♫♫ Yo tomo licor, yo tomo cerveza  Y me gustan las chicas y la cumbia me divierte y me excita.. ♫♫♫♫♫',
     19: 'A cantar: ♫♫♫ Yoooo tomo vino y cerveza 🍺 (Pisco y ron) para olvidarme de ella (Maraca culia), Tomo y me pongo loco (hasta los cocos), Loco de la cabeza (Esta cabeza) ♫♫♫',
