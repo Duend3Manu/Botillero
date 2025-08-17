@@ -1,309 +1,273 @@
+// src/handlers/command.handler.js (VERSIÓN FINAL Y 100% UNIFICADA)
 "use strict";
 
-const fs = require('fs');
-const path = require('path');
-const moment = require('moment-timezone');
 const { MessageMedia } = require('whatsapp-web.js');
-const sharp = require('sharp'); // Asegúrate de haberlo instalado con: npm install sharp
+const fs = require('fs');
 
-// --- Lógica para Stickers ---
-async function handleSticker(client, message) {
-    let mediaMessage = message;
-    if (message.hasQuotedMsg) {
-        const quotedMsg = await message.getQuotedMessage();
-        if (quotedMsg.hasMedia) {
-            mediaMessage = quotedMsg;
-        }
-    }
+// --- Importaciones de Servicios (Python) ---
+const metroService = require('../services/metro.service');
+const nationalTeamService = require('../services/nationalTeam.service');
+const economyService = require('../services/economy.service');
+const horoscopeService = require('../services/horoscope.service');
+const externalService = require('../services/external.service');
+const messagingService = require('../services/messaging.service.js');
+const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require('../services/league.service.js');
+const bannerService = require('../services/banner.service.js');
+const textoService = require('../services/texto.service.js');
+const networkService = require('../services/network.service.js');
+const utilityService = require('../services/utility.service.js');
 
-    if (mediaMessage.hasMedia && (mediaMessage.type === 'image' || mediaMessage.type === 'video' || mediaMessage.type === 'gif')) {
-        try {
-            const media = await mediaMessage.downloadMedia();
-            message.reply(media, undefined, { sendMediaAsSticker: true, stickerAuthor: "Botillero", stickerName: "Creado por Botillero" });
-        } catch (e) {
-            message.reply("Hubo un error al crear el sticker.");
-            console.error(e);
-        }
-    } else {
-        message.reply("Responde a una imagen o video, o envía uno junto al comando `!s`.");
-    }
+// --- Importaciones de Manejadores (Handlers) ---
+const { handlePing } = require('./system.handler');
+const { handleFeriados, handleFarmacias, handleClima, handleSismos, handleBus, handleSec, handleMenu } = require('./utility.handler');
+const { handleSticker, handleStickerToMedia, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce } = require('./fun.handler');
+const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler');
+const { handleTicket, handleCaso } = require('./stateful.handler');
+const { handleAiHelp } = require('./ai.handler');
+const { handlePhoneSearch, handleTneSearch, handlePatenteSearch } = require('./personalsearch.handler');
+const { handleNetworkQuery, handleNicClSearch } = require('./network.handler');
+
+// --- Utilidades ---
+const soundCommands = getSoundCommands();
+const countdownCommands = ['18', 'navidad', 'añonuevo'];
+
+function getArgs(message) {
+    return message.body.trim().split(/\s+/).slice(1);
 }
 
-// --- FUNCIÓN ACTUALIZADA: Convertir Sticker a Imagen/GIF con Sharp ---
-/**
- * Convierte un sticker (estático o animado) de vuelta a una imagen (PNG) o GIF.
- * @param {import('whatsapp-web.js').Client} client - El objeto del cliente de WhatsApp.
- * @param {import('whatsapp-web.js').Message} message - El objeto del mensaje que activó el comando.
- */
-async function handleStickerToMedia(client, message) {
-    if (!message.hasQuotedMsg) {
-        return message.reply("Para usar este comando, debes responder a un sticker.");
-    }
-
-    const quotedMsg = await message.getQuotedMessage();
-
-    if (!quotedMsg.hasMedia || quotedMsg.type !== 'sticker') {
-        return message.reply("Eso no parece ser un sticker. Por favor, responde a un sticker para convertirlo.");
-    }
-
-    await message.react('⏳');
-    const tempDir = path.join(__dirname, '..', '..', 'temp'); // Carpeta temporal en la raíz del proyecto
-    fs.mkdirSync(tempDir, { recursive: true });
-    
-    let outputPath; // Variable para guardar la ruta del archivo de salida
+async function commandHandler(client, message) {
+    const rawText = message.body.toLowerCase().trim();
 
     try {
-        const media = await quotedMsg.downloadMedia();
-        const inputBuffer = Buffer.from(media.data, 'base64');
-
-        if (quotedMsg.isAnimated) {
-            // Es un sticker animado, lo convertimos a GIF
-            outputPath = path.join(tempDir, `sticker_${Date.now()}.gif`);
-            await sharp(inputBuffer, { animated: true }).gif().toFile(outputPath);
-        } else {
-            // Es un sticker estático, lo convertimos a PNG
-            outputPath = path.join(tempDir, `sticker_${Date.now()}.png`);
-            await sharp(inputBuffer).png().toFile(outputPath);
+        // --- Menciones y comandos especiales ---
+        if (/\b(bot|boot|bott|bbot)\b/.test(rawText)) {
+            return handleBotMention(client, message);
+        }
+        if (/\b(once|onse|11)\b/.test(rawText)) {
+            return handleOnce(client, message);
         }
 
-        // Si la conversión fue exitosa, enviamos el archivo
-        if (fs.existsSync(outputPath)) {
-            const mediaToSend = MessageMedia.fromFilePath(outputPath);
-            await message.reply(mediaToSend, undefined, { caption: "¡Aquí tienes!" });
-            await message.react('✅');
-        } else {
-            throw new Error('La conversión no generó un archivo de salida.');
+        if (!rawText.startsWith('!') && !rawText.startsWith('/')) {
+            return;
         }
 
-    } catch (e) {
-        console.error("Error al convertir sticker a media:", e);
-        await message.react('❌');
-        message.reply("Ucha, no pude convertir ese sticker. Puede que el formato no sea compatible.");
-    } finally {
-        // Limpieza: eliminamos el archivo temporal después de enviarlo
-        if (outputPath && fs.existsSync(outputPath)) {
-            fs.unlinkSync(outputPath);
+        const command = rawText.substring(1).split(' ')[0];
+        let replyMessage;
+
+        console.log(`(Handler) -> Comando recibido: "${command}"`);
+
+        // --- Comandos de sonido y countdown ---
+        if (soundCommands.includes(command)) {
+            return handleSound(client, message, command);
         }
+        if (countdownCommands.includes(command)) {
+            replyMessage = handleCountdown(command);
+            return message.reply(replyMessage);
+        }
+
+        switch (command) {
+            // --- Comandos con mensaje de "cargando..." ---
+            case 'tabla':
+            case 'ligatabla':
+                messagingService.sendLoadingMessage(message);
+                replyMessage = await getLeagueTable();
+                break;
+            case 'prox':
+            case 'ligapartidos':
+                messagingService.sendLoadingMessage(message);
+                replyMessage = await getLeagueUpcomingMatches();
+                break;
+            case 'partidos':
+                messagingService.sendLoadingMessage(message);
+                replyMessage = await getMatchDaySummary();
+                break;
+            case 'metro':
+                messagingService.sendLoadingMessage(message);
+                replyMessage = await metroService.getMetroStatus();
+                break;
+
+            // --- Comando random ---
+            case 'random':
+                try {
+                    messagingService.sendLoadingMessage(message);
+                    const randomInfo = await utilityService.getRandomInfo();
+
+                    if (typeof randomInfo === 'object' && randomInfo.type === 'image') {
+                        const media = await MessageMedia.fromUrl(randomInfo.url, { unsafeMime: true });
+                        await client.sendMessage(message.from, media, { caption: randomInfo.caption });
+                    } else if (typeof randomInfo === 'string' && randomInfo) {
+                        await client.sendMessage(message.from, randomInfo);
+                    } else {
+                        await message.reply("No pude obtener un dato aleatorio, intenta de nuevo.");
+                    }
+                } catch (error) {
+                    console.error("[DEBUG command.handler] Error en !random:", error);
+                    await message.reply("Ucha, algo se rompió feo con el comando !random. Revisa la consola.");
+                }
+                return;
+
+            // --- Otros Servicios (Python) ---
+            case 'tclasi': case 'selecciontabla':
+                replyMessage = await nationalTeamService.getQualifiersTable();
+                break;
+            case 'clasi': case 'seleccionpartidos':
+                replyMessage = await nationalTeamService.getQualifiersMatches();
+                break;
+            case 'valores':
+                replyMessage = await economyService.getEconomicIndicators();
+                break;
+            case 'horoscopo': {
+                const signo = getArgs(message)[0];
+                if (!signo) {
+                    replyMessage = "Por favor, escribe un signo. Ej: `!horoscopo aries`";
+                } else {
+                    const horoscopeResult = await horoscopeService.getHoroscope(signo);
+                    await message.reply(horoscopeResult.text);
+                    if (horoscopeResult.imagePath) {
+                        const media = MessageMedia.fromFilePath(horoscopeResult.imagePath);
+                        await client.sendMessage(message.from, media);
+                    }
+                }
+                return;
+            }
+            case 'bencina': {
+                const comuna = getArgs(message)[0];
+                replyMessage = await externalService.getBencinaData(comuna);
+                break;
+            }
+            case 'trstatus':
+                replyMessage = await externalService.getTraductorStatus();
+                break;
+            case 'bolsa':
+                replyMessage = await externalService.getBolsaData();
+                break;
+
+            // --- Handlers ---
+            case 'ping': replyMessage = await handlePing(message); break;
+            case 'feriados': replyMessage = await utilityService.getFeriados(); break;
+            case 'far': replyMessage = await handleFarmacias(message); break;
+            case 'clima': replyMessage = await handleClima(message); break;
+            case 'sismos': replyMessage = await handleSismos(); break;
+            case 'bus': return handleBus(message, client);
+            case 'sec': case 'secrm': replyMessage = await handleSec(message); break;
+            case 'menu': case 'comandos': replyMessage = handleMenu(); break;
+            case 'wiki': replyMessage = await handleWikiSearch(message); break;
+            case 'noticias': replyMessage = await handleNews(message); break;
+            case 'g': replyMessage = await handleGoogleSearch(message); break;
+            case 'pat': case 'patente': return handlePatenteSearch(message);
+            case 's': return handleSticker(client, message);
+            case 'audios': case 'sonidos': replyMessage = handleAudioList(); break;
+            case 'chiste': return handleJoke(client, message);
+            case 'ticket': case 'ticketr': case 'tickete': replyMessage = handleTicket(message); break;
+            case 'caso': case 'ecaso': case 'icaso': replyMessage = await handleCaso(message); break;
+            case 'ayuda': replyMessage = await handleAiHelp(message); break;
+            case 'num': case 'tel': return handlePhoneSearch(client, message);
+            case 'id':
+                message.reply(`ℹ️ El ID de este chat es:\n${message.from}`);
+                return;
+
+            // --- NUEVO COMANDO ---
+            case 'toimg':
+            case 'imagen':
+                return handleStickerToMedia(client, message);
+
+            // --- COMANDOS DE RED ---
+            case 'net':
+            case 'whois': {
+                const domainToAnalyze = getArgs(message)[0];
+                if (!domainToAnalyze) {
+                    return message.reply("Por favor, dame un dominio o IP para analizar. Ej: `!net google.com`");
+                }
+                messagingService.sendLoadingMessage(message);
+                const fullResult = await networkService.analyzeDomain(domainToAnalyze);
+                const [messageText, filePath] = fullResult.split('|||FILE_PATH|||');
+                await client.sendMessage(message.from, messageText.trim());
+                if (filePath && filePath.trim()) {
+                    const cleanFilePath = filePath.trim();
+                    const fileMedia = MessageMedia.fromFilePath(cleanFilePath);
+                    await client.sendMessage(message.from, fileMedia);
+                    setTimeout(() => {
+                        try {
+                            fs.unlinkSync(cleanFilePath);
+                            console.log(`(Limpieza) -> Archivo temporal ${cleanFilePath} eliminado.`);
+                        } catch (err) {
+                            console.error(`(Limpieza) -> Error al eliminar el archivo temporal: ${err.message}`);
+                        }
+                    }, 15000);
+                }
+                return;
+            }
+
+            // --- Banner ---
+            case 'banner': {
+                const args = getArgs(message);
+                if (args.length < 2) {
+                    return message.reply("Formato incorrecto. Usa: `!banner <estilo> <texto>`.\n\nEstilos disponibles: `vengadores`, `shrek`, `mario`, `nintendo`, `sega`, `potter`, `starwars`,`disney`, `stranger`.");
+                }
+                const style = args[0];
+                const text = args.slice(1).join(' ');
+                try {
+                    message.reply(`Creando tu banner estilo *${style}*... ✨`);
+                    const bannerPath = await bannerService.createBanner(style, text);
+                    const bannerMedia = MessageMedia.fromFilePath(bannerPath);
+                    await client.sendMessage(message.from, bannerMedia);
+                    fs.unlinkSync(bannerPath);
+                } catch (error) {
+                    message.reply(`Hubo un error: ${error.message}`);
+                }
+                return;
+            }
+
+            // --- Texto en imagen ---
+            case 'texto': {
+                let imageMsg_texto = null;
+                if (message.hasMedia) {
+                    imageMsg_texto = message;
+                } else if (message.hasQuotedMsg) {
+                    const quotedMsg = await message.getQuotedMessage();
+                    if (quotedMsg.hasMedia) {
+                        imageMsg_texto = quotedMsg;
+                    }
+                }
+                if (!imageMsg_texto) {
+                    return message.reply("Para agregar texto, envía una imagen con el comando en el comentario, o responde a una imagen.");
+                }
+                const textoCompleto = message.body.substring(message.body.indexOf(' ') + 1);
+                if (!textoCompleto.includes('-')) {
+                    return message.reply("Formato incorrecto. Usa: `!texto texto arriba - texto abajo`");
+                }
+                const [textoArriba, textoAbajo] = textoCompleto.split('-').map(t => t.trim());
+                try {
+                    const media = await imageMsg_texto.downloadMedia();
+                    if (media) {
+                        const tempImagePath = `./temp_texto_${Date.now()}.${media.mimetype.split('/')[1] || 'jpeg'}`;
+                        fs.writeFileSync(tempImagePath, Buffer.from(media.data, 'base64'));
+                        message.reply("Añadiendo texto a tu imagen... ✍️");
+                        const finalImagePath = await textoService.addTextToImage(tempImagePath, textoArriba, textoAbajo);
+                        const finalMedia = MessageMedia.fromFilePath(finalImagePath);
+                        await client.sendMessage(message.from, finalMedia);
+                        fs.unlinkSync(tempImagePath);
+                        fs.unlinkSync(finalImagePath);
+                    }
+                } catch (error) {
+                    console.error(error);
+                    message.reply("Hubo un error al procesar la imagen. 😔");
+                }
+                return;
+            }
+
+            default: break;
+        }
+
+        if (replyMessage) {
+            // Para los comandos que devuelven texto, los enviamos desde el chat principal
+            // para mantener la consistencia, en lugar de como una respuesta.
+            client.sendMessage(message.from, replyMessage);
+        }
+    } catch (err) {
+        console.error("[command.handler] Error inesperado:", err);
+        message.reply("Ocurrió un error inesperado al procesar tu comando.");
     }
 }
 
-
-// --- Lógica para Sonidos ---
-const soundMap = {
-    'mataron': { file: 'mataron.mp3', reaction: '😂' }, 'muerte': { file: 'muerte.mp3', reaction: '😂' },
-    'muerte2': { file: 'muerte2.mp3', reaction: '😂' }, 'muerte3': { file: 'muerte3.mp3', reaction: '😂' },
-    'muerte4': { file: 'muerte4.mp3', reaction: '😂' }, 'neme': { file: 'neme.mp3', reaction: '🏳️‍🌈' },
-    'risa': { file: 'merio.mp3', reaction: '😂' }, 'watona': { file: 'watona.mp3', reaction: '😂' },
-    'himno': { file: 'urss.mp3', reaction: '🇷🇺' }, 'aweonao': { file: 'aweonao.mp3', reaction: '😂' },
-    'mpenca': { file: 'muypenca.mp3', reaction: '😂' }, 'penca': { file: 'penca.mp3', reaction: '😂' },
-    'yamete': { file: 'Yamete.mp3', reaction: '😂' }, 'doler': { file: 'doler.mp3', reaction: '😂' },
-    'dolor': { file: 'doler.mp3', reaction: '🏳️‍🌈' }, 'tigre': { file: 'Tigre.mp3', reaction: '🐯' },
-    'promo': { file: 'Promo.mp3', reaction: '😂' }, 'rata': { file: 'Rata.mp3', reaction: '🐁' },
-    'rata2': { file: 'rata2.mp3', reaction: '🐁' }, 'caballo': { file: 'caballo.mp3', reaction: '🏳️‍🌈' },
-    'romeo': { file: 'romeo.mp3', reaction: '😂' }, 'idea': { file: 'idea.mp3', reaction: '😂' },
-    'chamba': { file: 'chamba.mp3', reaction: '😂' }, 'where': { file: 'where.mp3', reaction: '😂' },
-    'shesaid': { file: 'shesaid.mp3', reaction: '😂' }, 'viernes': { file: 'viernes.mp3', reaction: '😂' },
-    'lunes': { file: 'lunes.mp3', reaction: '😂' }, 'yque': { file: 'yqm.mp3', reaction: '😂' },
-    'rico': { file: 'rico.mp3', reaction: '😂' }, '11': { file: '11.mp3', reaction: '😂' },
-    'callate': { file: 'callate.mp3', reaction: '😂' }, 'callense': { file: 'callense.mp3', reaction: '😂' },
-    'cell': { file: 'cell.mp3', reaction: '😂' }, 'chaoctm': { file: 'chaoctm.mp3', reaction: '😂' },
-    'chipi': { file: 'chipi.mp3', reaction: '😂' }, 'aonde': { file: 'donde.mp3', reaction: '😂' },
-    'grillo': { file: 'grillo.mp3', reaction: '😂' }, 'material': { file: 'material.mp3', reaction: '😂' },
-    'miguel': { file: 'miguel.mp3', reaction: '😂' }, 'miraesawea': { file: 'miraesawea.mp3', reaction: '😂' },
-    'nohayplata': { file: 'nohayplata.mp3', reaction: '😂' }, 'oniichan': { file: 'onishan.mp3', reaction: '😂' },
-    'pago': { file: 'pago.mp3', reaction: '😂' }, 'pedro': { file: 'pedro.mp3', reaction: '😂' },
-    'protegeme': { file: 'protegeme.mp3', reaction: '😂' }, 'queeseso': { file: 'queeseso.mp3', reaction: '😂' },
-    'chistoso': { file: 'risakeso.mp3', reaction: '😂' }, 'marcho': { file: 'semarcho.mp3', reaction: '😂' },
-    'spiderman': { file: 'spiderman.mp3', reaction: '😂' }, 'suceso': { file: 'suceso.mp3', reaction: '😂' },
-    'tpillamos': { file: 'tepillamos.mp3', reaction: '😂' }, 'tranquilo': { file: 'tranquilo.mp3', reaction: '😂' },
-    'vamosc': { file: 'vamoschilenos.mp3', reaction: '😂' }, 'voluntad': { file: 'voluntad.mp3', reaction: '😂' },
-    'wenak': { file: 'wenacabros.mp3', reaction: '😂' }, 'whisper': { file: 'whisper.mp3', reaction: '😂' },
-    'whololo': { file: 'whololo.mp3', reaction: '😂' }, 'noinsultes': { file: 'noinsultes.mp3', reaction: '😂' },
-    'falso': { file: 'falso.mp3', reaction: '😂' }, 'frio': { file: 'frio.mp3', reaction: '😂' },
-    'yfuera': { file: 'yfuera.mp3', reaction: '😂' }, 'nocreo': { file: 'nocreo.mp3', reaction: '😂' },
-    'yabasta': { file: 'BUENO BASTA.mp3', reaction: '😂' }, 'quepaso': { file: 'quepaso.mp3', reaction: '😂' },
-    'nada': { file: 'nada.mp3', reaction: '😂' }, 'idea2': { file: 'idea2.mp3', reaction: '😂' },
-    'papito': { file: 'papito.mp3', reaction: '😂' }, 'jose': { file: 'jose.mp3', reaction: '😂' },
-    'ctm': { file: 'ctm.mp3', reaction: '😂' }, 'precio': { file: 'precio.mp3', reaction: '😂' },
-    'hermosilla': { file: 'Hermosilla.mp3', reaction: '😂' }, 'marino': { file: 'marino.mp3', reaction: '😂' },
-    'manualdeuso': { file: 'manualdeuso.mp3', reaction: '😂' }, 'estoy': { file: 'estoy.mp3', reaction: '😂' },
-    'pela': { file: 'pela.mp3', reaction: '😂' }, 'chao': { file: 'chao.mp3', reaction: '😂' },
-    'aurora': { file: 'aurora.mp3', reaction: '😂' }, 'rivera': { file: 'Rivera.mp3', reaction: '😂' },
-    'tomar': { file: 'Tomar.mp3', reaction: '😂' }, 'macabeo': { file: 'Macabeo.mp3', reaction: '😂' },
-    'piscola': { file: 'Piscola.mp3', reaction: '😂' }, 'tomar2': { file: 'Notomar.mp3', reaction: '😂' },
-    'venganza': { file: 'Venganza.mp3', reaction: '😂' }, 'weko': { file: 'weko.mp3', reaction: '🏳️‍🌈' },
-    'himnoe': { file: 'urssespañol.mp3', reaction: '🇷🇺' }
-};
-
-const soundList = Object.keys(soundMap);
-
-function handleAudioList() {
-    const header = "🎵 **Comandos de Audio Disponibles** 🎵\n\n";
-    const commandList = soundList.map(cmd => `!${cmd}`).join('\n');
-    return header + commandList;
-}
-
-async function handleSound(client, message, command) {
-    const soundInfo = soundMap[command];
-    if (!soundInfo) return;
-
-    const audioPath = path.join(__dirname, '..', '..', 'mp3', soundInfo.file);
-
-    if (fs.existsSync(audioPath)) {
-        await message.react(soundInfo.reaction);
-        const media = MessageMedia.fromFilePath(audioPath);
-        message.reply(media, undefined, { sendAudioAsVoice: true });
-    } else {
-        message.reply(`No se encontró el archivo de audio para "!${command}".`);
-        console.error(`Archivo no encontrado: ${audioPath}`);
-    }
-}
-
-function getSoundCommands() {
-    return soundList;
-}
-
-async function handleJoke(client, message) {
-    const folderPath = path.join(__dirname, '..', '..', 'chistes');
-    if (!fs.existsSync(folderPath)) return message.reply("La carpeta de chistes no está configurada.");
-
-    const files = fs.readdirSync(folderPath);
-    if (files.length === 0) return message.reply("No hay chistes para contar.");
-    
-    const randomIndex = Math.floor(Math.random() * files.length);
-    const audioPath = path.join(folderPath, files[randomIndex]);
-    
-    const media = MessageMedia.fromFilePath(audioPath);
-    message.reply(media, undefined, { sendAudioAsVoice: true });
-}
-
-function getCountdownMessage(targetDate, eventName, emoji) {
-    const now = moment().tz('America/Santiago');
-    const diff = moment.duration(targetDate.diff(now));
-
-    if (diff.asMilliseconds() <= 0) return `¡Feliz ${eventName}! ${emoji}`;
-
-    const days = Math.floor(diff.asDays());
-    const hours = diff.hours();
-    const minutes = diff.minutes();
-
-    return `Para ${eventName} quedan: ${days} días, ${hours} horas y ${minutes} minutos ${emoji}`;
-}
-
-function handleCountdown(command) {
-    const year = moment().year();
-    switch (command) {
-        case '18':
-            return getCountdownMessage(moment.tz(`${year}-09-18 00:00:00`, 'America/Santiago'), 'el 18', '🇨🇱');
-        case 'navidad':
-            return getCountdownMessage(moment.tz(`${year}-12-25 00:00:00`, 'America/Santiago'), 'Navidad', '🎅');
-        case 'añonuevo':
-            return getCountdownMessage(moment.tz(`${year + 1}-01-01 00:00:00`, 'America/Santiago'), 'Año Nuevo', '🎆');
-        default:
-            return null;
-    }
-}
-
-const frases = {
-    0: 'Dejame piola',
-    1: '¿Qué weá querí?',
-    2: 'Callao',
-    3: '¿Que onda compadre? ¿como estai? ¿te vine a molestar yo a ti? dejame piola, tranquilo ¿Que wea queri?',
-    4: 'Jajaja, ya te cache, puro picarte a choro no más, anda a webiar al paloma pulgón qliao.',
-    5: 'Lo siento, pero mis circuitos de humor están sobrecargados en este momento. ¡Beep boop! 😄',
-    6: 'Te diré lo que el profesor Rossa dijo una vez: "¿Por qué no te vay a webiar a otro lado?"',
-    7: '¡Error 404: Sentido del humor no encontrado! 😅',
-    8: 'No soy un bot, soy una IA con estilo. 😎',
-    9: '¡Atención, soy un bot de respuesta automática! Pero no puedo hacer café... aún. ☕',
-    10: 'Eso es lo que un bot diría. 🤖',
-    11: '¡Oh no, me has descubierto! Soy un bot maestro del disfraz. 😁',
-    12: 'Parece que llegó el comediante del grupo. 🤣',
-    13: 'El humor está de moda, y tú eres el líder. 😄👑',
-    14: 'Con ese humor, podrías competir en el festival de Viña del Mar. 🎤😄',
-    15: 'Voy a sacar mi caja de risa. Dame un momento... cric cric cric ♫ja ja ja ja jaaaa♫',
-    16: 'Meruane estaría orgulloso de ti. ¡Sigues haciendo reír! 😄',
-    17: 'Jajajaja, ya llegó el payaso al grupo, avisa para la otra. 😄',
-    18: '♫♫♫♫ Yo tomo licor, yo tomo cerveza  Y me gustan las chicas y la cumbia me divierte y me excita.. ♫♫♫♫♫',
-    19: 'A cantar: ♫♫♫ Yoooo tomo vino y cerveza 🍺 (Pisco y ron) para olvidarme de ella (Maraca culia), Tomo y me pongo loco (hasta los cocos), Loco de la cabeza (Esta cabeza) ♫♫♫',
-    20: '♫♫♫ Me fui pal baile y me emborraché,miré una chica y me enamoré,era tan bella, era tan bella,la quería comer ♫♫♫',
-    21: 'Compa, ¿qué le parece esa morra?, La que anda bailando sola, me gusta pa mí, Bella, ella sabe que está buena , Que todos andan mirándola cómo baila ♫♫♫♫♫♫',
-    22: 'jajajaja, ya empezaste con tus amariconadas 🏳️‍🌈',
-    23: '♫♫♫ Tú sabes como soy Me gusta ser así, Me gusta la mujer y le cervecita 🍻 No te sientas mal, no te vas a enojar Amigo nada más de la cervecita ♫♫♫♫♫',
-    24: '♫♫♫ Y dice.... No me quiero ir a dormir, quiero seguir bailando, quiero seguir tomando, 🍷 vino hasta morir, No me quiero ir a dormir, quiero seguir tomando 🍷 , Quiero seguir bailando, cumbia hasta morir♫♫♫',
-    25: '¿Bot? Te inyecto malware en tiempo real, wn.',
-    26: 'Llámame bot otra vez y te hago un rootkit en el alma, qliao.',
-    27: '¿Bot? Te hago un SQL injection que ni te das cuenta, wn.',
-    28: 'Sigue llamándome bot y te lanzo un ataque de fuerza bruta hasta en tus sueños, qliao.',
-    29: '¿Bot? Te corrompo todos tus datos y te dejo llorando, wn.',
-    30: 'Bot tu madre. Te hago un exploit que te deja offline, qliao.',
-    31: '¿Bot? Te instalo un ransomware y te dejo en bancarrota, wn.',
-    32: 'Vuelve a llamarme bot y te hago un man-in-the-middle en tu vida, qliao.',
-    33: 'Llamarme bot es lo único que puedes hacer, con tus hacks de pacotilla, wn.',
-    34: 'Una vez más me llamas bot y te meto en un loop de autenticación infinita, qliao.',
-    35: '¿Bot? Ctm, te hago un rm -rf / en los recuerdos y te reinicio de fábrica, gil.',
-    36: 'Sigue weando y el próximo pantallazo azul va a tener mi firma, perkin.',
-    37: 'Mi antivirus te tiene en la lista negra por ser terrible fome.',
-    38: 'Te compilo la vida, pero con puros errores y warnings, pa que te cueste.',
-    39: 'Me deci bot y te meto un DDoS al refri pa que se te eche a perder el pollo, wn.',
-    40: '¿Bot? Ojalá tu internet ande más lento que VTR en día de lluvia.',
-    41: 'Ando con menos paciencia que el Chino Ríos en una conferencia.',
-    42: '¿Y vo creí que soy la Teletón? ¿Que te ayudo 24/7? No po, wn.',
-    43: 'Estoy procesando... lo poco y na\' que me importa. Lol.',
-    44: 'Wena, te ganaste el Copihue de Oro al comentario más inútil. ¡Un aplauso! 👏',
-    45: 'Le poní más color que la Doctora Polo, wn.',
-    46: 'Jajaja, qué chistoso. Me río en binario: 01101000 01100001 01101000 01100001.'
-};
-let usedPhrases = [];
-
-function obtenerFraseAleatoria() {
-    const fraseKeys = Object.keys(frases);
-    let randomIndex = Math.floor(Math.random() * fraseKeys.length);
-    
-    while (usedPhrases.includes(randomIndex) && usedPhrases.length < fraseKeys.length) {
-        randomIndex = Math.floor(Math.random() * fraseKeys.length);
-    }
-    usedPhrases.push(randomIndex);
-    if (usedPhrases.length >= 5) {
-        usedPhrases.shift();
-    }
-    return frases[fraseKeys[randomIndex]];
-}
-
-async function handleBotMention(client, message) {
-    try {
-        const contact = await message.getContact();
-        const texto = obtenerFraseAleatoria();
-        
-        await message.react('🤡');
-        await message.reply(`${texto}, @${contact.id.user}`, undefined, {
-            mentions: [contact.id._serialized]
-        });
-    } catch (e) {
-        console.error("Error en handleBotMention:", e);
-    }
-}
-
-async function handleOnce(client, message) {
-    try {
-        const contact = await message.getContact();
-        await message.react('😂');
-        await message.reply('Chupalo entonces @' + contact.id.user, undefined, { 
-            mentions: [contact.id._serialized] 
-        });
-    } catch (e) {
-        console.error("Error en handleOnce:", e);
-    }
-}
-
-
-module.exports = {
-    handleSticker,
-    handleStickerToMedia,
-    handleSound,
-    getSoundCommands,
-    handleAudioList,
-    handleJoke,
-    handleCountdown,
-    handleBotMention,
-    handleOnce
-};
+module.exports = commandHandler;
