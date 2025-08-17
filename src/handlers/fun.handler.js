@@ -211,11 +211,11 @@ function handleCountdown(command) {
 }
 
 const frases = {
-    0: 'Dejame piola',
+    0: 'Déjame piola',
     1: '¿Qué weá querí?',
     2: 'Callao',
-    3: '¿Que onda compadre? ¿como estai? ¿te vine a molestar yo a ti? dejame piola, tranquilo ¿Que wea queri?',
-    4: 'Jajaja, ya te cache, puro picarte a choro no más, anda a webiar al paloma pulgón qliao.',
+    3: '¿Qué onda compadre? ¿cómo estai? ¿te vine a molestar yo a ti? déjame piola, tranquilo ¿Qué wea queri?',
+    4: 'Jajaja, ya te caché, puro picarte a choro no más, anda a webiar al paloma pulgón qliao.',
     5: 'Lo siento, pero mis circuitos de humor están sobrecargados en este momento. ¡Beep boop! 😄',
     6: 'Te diré lo que el profesor Rossa dijo una vez: "¿Por qué no te vay a webiar a otro lado?"',
     7: '¡Error 404: Sentido del humor no encontrado! 😅',
@@ -293,7 +293,7 @@ async function handleOnce(client, message) {
     try {
         const contact = await message.getContact();
         await message.react('😂');
-        await message.reply('Chupalo entonces @' + contact.id.user, undefined, { 
+        await message.reply('Chúpalo entonces @' + contact.id.user, undefined, { 
             mentions: [contact.id._serialized] 
         });
     } catch (e) {
@@ -325,7 +325,6 @@ async function handleRuleta(client, message) {
     const contact = await message.getContact();
     const nombreUsuario = contact.pushname || contact.name || `Usuario-${userId.slice(0, 4)}`;
 
-    // Inicializar o actualizar datos del usuario
     if (!puntosData[userId]) {
         puntosData[userId] = {
             puntos: 0,
@@ -333,7 +332,6 @@ async function handleRuleta(client, message) {
             nombre: nombreUsuario
         };
     } else {
-        // Actualiza el nombre por si el usuario lo cambió en WhatsApp
         puntosData[userId].nombre = nombreUsuario;
     }
 
@@ -348,7 +346,9 @@ async function handleRuleta(client, message) {
     const ruletaGifPath = path.join(__dirname, '..', '..', 'assets', 'ruleta.gif');
     if (fs.existsSync(ruletaGifPath)) {
         const media = MessageMedia.fromFilePath(ruletaGifPath);
-        await client.sendMessage(message.from, media);
+        // --- CORRECCIÓN ---
+        // Añadimos la opción { sendVideoAsGif: true } para que se envíe como un GIF animado.
+        await client.sendMessage(message.from, media, { sendVideoAsGif: true });
     }
 
     await message.reply('Girando la ruleta... 🎰');
@@ -381,7 +381,6 @@ async function handleRuleta(client, message) {
     let mensajeResultado = `*${nombreUsuario}*, la ruleta se detuvo y ganaste:\n\n🎉 *${premioGanado.nombre}* 🎉`;
     mensajeResultado += `\n\nAhora tienes un total de *${puntosData[userId].puntos}* puntos.`;
 
-    // --- LÓGICA DEL RANKING ---
     if (premioGanado.puntos > 0) {
         const rankingArray = Object.values(puntosData);
         rankingArray.sort((a, b) => b.puntos - a.puntos);
