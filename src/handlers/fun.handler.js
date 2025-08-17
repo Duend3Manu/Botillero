@@ -346,12 +346,13 @@ async function handleRuleta(client, message) {
     const ruletaGifPath = path.join(__dirname, '..', '..', 'assets', 'ruleta.gif');
     if (fs.existsSync(ruletaGifPath)) {
         const media = MessageMedia.fromFilePath(ruletaGifPath);
-        // --- CORRECCIÓN ---
-        // Añadimos la opción { sendVideoAsGif: true } para que se envíe como un GIF animado.
-        await client.sendMessage(message.from, media, { sendVideoAsGif: true });
+        // --- CORRECCIÓN FINAL ---
+        // Se envía el GIF con su leyenda en un solo mensaje para asegurar la animación.
+        await client.sendMessage(message.from, media, { caption: 'Girando la ruleta... 🎰', sendVideoAsGif: true });
+    } else {
+        await message.reply('Girando la ruleta... 🎰');
     }
 
-    await message.reply('Girando la ruleta... 🎰');
     await new Promise(resolve => setTimeout(resolve, 4000));
 
     const premios = [
