@@ -33,7 +33,6 @@ async function handleSticker(client, message) {
 async function handleStickerToMedia(client, message) {
     let sharp;
     try {
-        // Se carga la librería 'sharp' solo cuando se ejecuta este comando.
         sharp = require('sharp');
     } catch (err) {
         console.error("----------- ERROR CRÍTICO: FALTA LA LIBRERÍA 'SHARP' -----------");
@@ -302,12 +301,11 @@ async function handleOnce(client, message) {
     }
 }
 
-// --- NUEVA LÓGICA PARA LA RULETA ---
+// --- LÓGICA PARA LA RULETA Y PUNTOS ---
 
 const DB_PATH = path.join(__dirname, '..', '..', 'database', 'puntos.json');
-const COOLDOWN_SECONDS = 15; // 5 minutos de espera entre tiradas
+const COOLDOWN_SECONDS = 300; // 5 minutos de espera entre tiradas
 
-// Función para leer la base de datos de puntos
 function leerPuntos() {
     if (!fs.existsSync(DB_PATH)) {
         fs.writeFileSync(DB_PATH, JSON.stringify({}));
@@ -317,7 +315,6 @@ function leerPuntos() {
     return JSON.parse(data);
 }
 
-// Función para guardar los puntos en la base de datos
 function guardarPuntos(data) {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
@@ -325,37 +322,38 @@ function guardarPuntos(data) {
 async function handleRuleta(client, message) {
     const userId = message.author || message.from;
     const puntosData = leerPuntos();
+    const contact = await message.getContact();
+    const nombreUsuario = contact.pushname || contact.name || `Usuario-${userId.slice(0, 4)}`;
 
-    // Inicializar usuario si no existe
+    // Inicializar o actualizar datos del usuario
     if (!puntosData[userId]) {
         puntosData[userId] = {
             puntos: 0,
-            ultimoJuego: null
+            ultimoJuego: null,
+            nombre: nombreUsuario
         };
+    } else {
+        // Actualiza el nombre por si el usuario lo cambió en WhatsApp
+        puntosData[userId].nombre = nombreUsuario;
     }
 
     const ahora = moment();
     const ultimoJuego = puntosData[userId].ultimoJuego ? moment(puntosData[userId].ultimoJuego) : null;
 
-    // Verificar cooldown
     if (ultimoJuego && ahora.diff(ultimoJuego, 'seconds') < COOLDOWN_SECONDS) {
         const tiempoRestante = COOLDOWN_SECONDS - ahora.diff(ultimoJuego, 'seconds');
         return message.reply(`⏳ ¡Tranquilo, vaquero! Debes esperar ${tiempoRestante} segundos más para volver a girar la ruleta.`);
     }
 
-    // --- Animación y Lógica del Juego ---
     const ruletaGifPath = path.join(__dirname, '..', '..', 'assets', 'ruleta.gif');
     if (fs.existsSync(ruletaGifPath)) {
         const media = MessageMedia.fromFilePath(ruletaGifPath);
-        await client.sendMessage(message.from, media, { sendMediaAsSticker: true });
+        await client.sendMessage(message.from, media);
     }
 
     await message.reply('Girando la ruleta... 🎰');
+    await new Promise(resolve => setTimeout(resolve, 4000));
 
-    // Simular espera
-    await new Promise(resolve => setTimeout(resolve, 4000)); // Espera 4 segundos
-
-    // Definir premios y sus probabilidades (deben sumar 100)
     const premios = [
         { nombre: '¡Nada! Suerte para la próxima', puntos: 0, chance: 30 },
         { nombre: '10 puntitos', puntos: 10, chance: 40 },
@@ -364,10 +362,9 @@ async function handleRuleta(client, message) {
         { nombre: '¡¡500 PUNTOS!! ¡El Jackpot!', puntos: 500, chance: 5 }
     ];
 
-    // Calcular el premio
     const random = Math.random() * 100;
     let acumulado = 0;
-    let premioGanado = premios[0]; // Premio por defecto
+    let premioGanado = premios[0];
 
     for (const premio of premios) {
         acumulado += premio.chance;
@@ -377,20 +374,25 @@ async function handleRuleta(client, message) {
         }
     }
 
-    // Actualizar datos del usuario
     puntosData[userId].puntos += premioGanado.puntos;
     puntosData[userId].ultimoJuego = ahora.toISOString();
     guardarPuntos(puntosData);
-
-    // Enviar resultado
-    const contact = await message.getContact();
-    const nombreUsuario = contact.pushname || contact.name || 'Tú';
     
     let mensajeResultado = `*${nombreUsuario}*, la ruleta se detuvo y ganaste:\n\n🎉 *${premioGanado.nombre}* 🎉`;
+    mensajeResultado += `\n\nAhora tienes un total de *${puntosData[userId].puntos}* puntos.`;
+
+    // --- LÓGICA DEL RANKING ---
     if (premioGanado.puntos > 0) {
-        mensajeResultado += `\n\nAhora tienes un total de *${puntosData[userId].puntos}* puntos.`;
-    } else {
-        mensajeResultado += `\n\nActualmente tienes *${puntosData[userId].puntos}* puntos.`;
+        const rankingArray = Object.values(puntosData);
+        rankingArray.sort((a, b) => b.puntos - a.puntos);
+        const top3 = rankingArray.slice(0, 3);
+
+        let rankingTexto = "\n\n*👑 Ranking Top 3 👑*";
+        const medallas = ['🥇', '🥈', '🥉'];
+        top3.forEach((jugador, index) => {
+            rankingTexto += `\n${medallas[index]} ${jugador.nombre}: *${jugador.puntos}* pts`;
+        });
+        mensajeResultado += rankingTexto;
     }
 
     await message.reply(mensajeResultado);
