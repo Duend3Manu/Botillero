@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
 const { MessageMedia } = require('whatsapp-web.js');
-const sharp = require('sharp'); // Asegúrate de haberlo instalado con: npm install sharp
+// NO importamos 'sharp' aquí para evitar que el bot se caiga si no está instalado.
 
 // --- Lógica para Stickers ---
 async function handleSticker(client, message) {
@@ -29,13 +29,20 @@ async function handleSticker(client, message) {
     }
 }
 
-// --- FUNCIÓN ACTUALIZADA: Convertir Sticker a Imagen/GIF con Sharp ---
-/**
- * Convierte un sticker (estático o animado) de vuelta a una imagen (PNG) o GIF.
- * @param {import('whatsapp-web.js').Client} client - El objeto del cliente de WhatsApp.
- * @param {import('whatsapp-web.js').Message} message - El objeto del mensaje que activó el comando.
- */
+// --- FUNCIÓN CON CARGA SEGURA DE SHARP ---
 async function handleStickerToMedia(client, message) {
+    let sharp;
+    try {
+        // Se carga la librería 'sharp' solo cuando se ejecuta este comando.
+        sharp = require('sharp');
+    } catch (err) {
+        console.error("----------- ERROR CRÍTICO: FALTA LA LIBRERÍA 'SHARP' -----------");
+        console.error("La librería 'sharp' no se pudo cargar. Es probable que no se haya instalado correctamente.");
+        console.error("Por favor, detén el bot y ejecuta 'npm install sharp' en tu terminal y luego reinícialo.");
+        console.error(err);
+        return message.reply("❌ Error: La función para convertir imágenes no está disponible. El administrador debe instalar la librería 'sharp'.");
+    }
+
     if (!message.hasQuotedMsg) {
         return message.reply("Para usar este comando, debes responder a un sticker.");
     }
@@ -47,32 +54,29 @@ async function handleStickerToMedia(client, message) {
     }
 
     await message.react('⏳');
-    const tempDir = path.join(__dirname, '..', '..', 'temp'); // Carpeta temporal en la raíz del proyecto
+    const tempDir = path.join(__dirname, '..', '..', 'temp');
     fs.mkdirSync(tempDir, { recursive: true });
     
-    let outputPath; // Variable para guardar la ruta del archivo de salida
+    let outputPath;
 
     try {
         const media = await quotedMsg.downloadMedia();
         const inputBuffer = Buffer.from(media.data, 'base64');
 
         if (quotedMsg.isAnimated) {
-            // Es un sticker animado, lo convertimos a GIF
             outputPath = path.join(tempDir, `sticker_${Date.now()}.gif`);
             await sharp(inputBuffer, { animated: true }).gif().toFile(outputPath);
         } else {
-            // Es un sticker estático, lo convertimos a PNG
             outputPath = path.join(tempDir, `sticker_${Date.now()}.png`);
             await sharp(inputBuffer).png().toFile(outputPath);
         }
 
-        // Si la conversión fue exitosa, enviamos el archivo
-        if (fs.existsSync(outputPath)) {
+        if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 0) {
             const mediaToSend = MessageMedia.fromFilePath(outputPath);
             await message.reply(mediaToSend, undefined, { caption: "¡Aquí tienes!" });
             await message.react('✅');
         } else {
-            throw new Error('La conversión no generó un archivo de salida.');
+            throw new Error('La conversión no generó un archivo de salida válido.');
         }
 
     } catch (e) {
@@ -80,9 +84,12 @@ async function handleStickerToMedia(client, message) {
         await message.react('❌');
         message.reply("Ucha, no pude convertir ese sticker. Puede que el formato no sea compatible.");
     } finally {
-        // Limpieza: eliminamos el archivo temporal después de enviarlo
         if (outputPath && fs.existsSync(outputPath)) {
-            fs.unlinkSync(outputPath);
+            try {
+                fs.unlinkSync(outputPath);
+            } catch (unlinkErr) {
+                console.error(`Error al eliminar archivo temporal: ${unlinkErr}`);
+            }
         }
     }
 }
@@ -295,6 +302,114 @@ async function handleOnce(client, message) {
     }
 }
 
+// --- NUEVA LÓGICA PARA LA RULETA ---
+
+const DB_PATH = path.join(__dirname, '..', '..', 'database', 'puntos.json');
+const COOLDOWN_SECONDS = 300; // 5 minutos de espera entre tiradas
+
+// Función para leer la base de datos de puntos
+function leerPuntos() {
+    if (!fs.existsSync(DB_PATH)) {
+        fs.writeFileSync(DB_PATH, JSON.stringify({}));
+        return {};
+    }
+    const data = fs.readFileSync(DB_PATH, 'utf-8');
+    return JSON.parse(data);
+}
+
+// Función para guardar los puntos en la base de datos
+function guardarPuntos(data) {
+    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+}
+
+async function handleRuleta(client, message) {
+    const userId = message.author || message.from;
+    const puntosData = leerPuntos();
+
+    // Inicializar usuario si no existe
+    if (!puntosData[userId]) {
+        puntosData[userId] = {
+            puntos: 0,
+            ultimoJuego: null
+        };
+    }
+
+    const ahora = moment();
+    const ultimoJuego = puntosData[userId].ultimoJuego ? moment(puntosData[userId].ultimoJuego) : null;
+
+    // Verificar cooldown
+    if (ultimoJuego && ahora.diff(ultimoJuego, 'seconds') < COOLDOWN_SECONDS) {
+        const tiempoRestante = COOLDOWN_SECONDS - ahora.diff(ultimoJuego, 'seconds');
+        return message.reply(`⏳ ¡Tranquilo, vaquero! Debes esperar ${tiempoRestante} segundos más para volver a girar la ruleta.`);
+    }
+
+    // --- Animación y Lógica del Juego ---
+    const ruletaGifPath = path.join(__dirname, '..', '..', 'assets', 'ruleta.gif');
+    if (fs.existsSync(ruletaGifPath)) {
+        const media = MessageMedia.fromFilePath(ruletaGifPath);
+        await client.sendMessage(message.from, media, { sendMediaAsSticker: true });
+    }
+
+    await message.reply('Girando la ruleta... 🎰');
+
+    // Simular espera
+    await new Promise(resolve => setTimeout(resolve, 4000)); // Espera 4 segundos
+
+    // Definir premios y sus probabilidades (deben sumar 100)
+    const premios = [
+        { nombre: '¡Nada! Suerte para la próxima', puntos: 0, chance: 30 },
+        { nombre: '10 puntitos', puntos: 10, chance: 40 },
+        { nombre: '50 puntos', puntos: 50, chance: 15 },
+        { nombre: '¡100 puntos! Nada mal', puntos: 100, chance: 10 },
+        { nombre: '¡¡500 PUNTOS!! ¡El Jackpot!', puntos: 500, chance: 5 }
+    ];
+
+    // Calcular el premio
+    const random = Math.random() * 100;
+    let acumulado = 0;
+    let premioGanado = premios[0]; // Premio por defecto
+
+    for (const premio of premios) {
+        acumulado += premio.chance;
+        if (random < acumulado) {
+            premioGanado = premio;
+            break;
+        }
+    }
+
+    // Actualizar datos del usuario
+    puntosData[userId].puntos += premioGanado.puntos;
+    puntosData[userId].ultimoJuego = ahora.toISOString();
+    guardarPuntos(puntosData);
+
+    // Enviar resultado
+    const contact = await message.getContact();
+    const nombreUsuario = contact.pushname || contact.name || 'Tú';
+    
+    let mensajeResultado = `*${nombreUsuario}*, la ruleta se detuvo y ganaste:\n\n🎉 *${premioGanado.nombre}* 🎉`;
+    if (premioGanado.puntos > 0) {
+        mensajeResultado += `\n\nAhora tienes un total de *${puntosData[userId].puntos}* puntos.`;
+    } else {
+        mensajeResultado += `\n\nActualmente tienes *${puntosData[userId].puntos}* puntos.`;
+    }
+
+    await message.reply(mensajeResultado);
+}
+
+async function handlePuntos(client, message) {
+    const userId = message.author || message.from;
+    const puntosData = leerPuntos();
+
+    if (!puntosData[userId] || puntosData[userId].puntos === 0) {
+        return message.reply("Aún no tienes puntos. ¡Usa `!ruleta` para empezar a ganar!");
+    }
+
+    const contact = await message.getContact();
+    const nombreUsuario = contact.pushname || contact.name || 'Tú';
+
+    await message.reply(`*${nombreUsuario}*, actualmente tienes:\n\n🏆 *${puntosData[userId].puntos}* puntos 🏆`);
+}
+
 
 module.exports = {
     handleSticker,
@@ -305,5 +420,7 @@ module.exports = {
     handleJoke,
     handleCountdown,
     handleBotMention,
-    handleOnce
+    handleOnce,
+    handleRuleta,
+    handlePuntos
 };

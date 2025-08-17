@@ -1,4 +1,3 @@
-// src/handlers/command.handler.js (VERSIÓN FINAL Y 100% UNIFICADA)
 "use strict";
 
 const { MessageMedia } = require('whatsapp-web.js');
@@ -20,7 +19,8 @@ const utilityService = require('../services/utility.service.js');
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');
 const { handleFeriados, handleFarmacias, handleClima, handleSismos, handleBus, handleSec, handleMenu } = require('./utility.handler');
-const { handleSticker, handleStickerToMedia, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce } = require('./fun.handler');
+// --- MODIFICACIÓN 1: Importar las nuevas funciones de la ruleta ---
+const { handleSticker, handleStickerToMedia, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce, handleRuleta, handlePuntos } = require('./fun.handler');
 const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler');
 const { handleTicket, handleCaso } = require('./stateful.handler');
 const { handleAiHelp } = require('./ai.handler');
@@ -166,10 +166,17 @@ async function commandHandler(client, message) {
                 message.reply(`ℹ️ El ID de este chat es:\n${message.from}`);
                 return;
 
-            // --- NUEVO COMANDO ---
             case 'toimg':
             case 'imagen':
                 return handleStickerToMedia(client, message);
+
+            // --- MODIFICACIÓN 2: Añadir los nuevos comandos de la ruleta ---
+            case 'ruleta':
+                return handleRuleta(client, message);
+            
+            case 'puntos':
+            case 'score':
+                return handlePuntos(client, message);
 
             // --- COMANDOS DE RED ---
             case 'net':
@@ -260,8 +267,6 @@ async function commandHandler(client, message) {
         }
 
         if (replyMessage) {
-            // Para los comandos que devuelven texto, los enviamos desde el chat principal
-            // para mantener la consistencia, en lugar de como una respuesta.
             client.sendMessage(message.from, replyMessage);
         }
     } catch (err) {
