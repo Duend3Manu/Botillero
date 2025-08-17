@@ -6,65 +6,68 @@ const puppeteer = require('puppeteer');
 const config = require('../config');
 const { generateWhatsAppMessage } = require('../utils/secService');
 
-// --- ESTRUCTURA DE COMANDOS PARA EL MENÚ DINÁMICO ---
-// Ahora, para añadir o quitar un comando del menú, solo tienes que editar esta sección.
+// --- ESTRUCTURA DE COMANDOS PARA EL MENÚ DINÁMICO Y VISUAL ---
+// Ahora el menú tiene emojis para ser más atractivo.
 const menuConfig = {
-    "UTILIDAD": [
-        { cmd: "!ping", desc: "Mide la latencia del bot." },
-        { cmd: "!metro", desc: "Estado de la red de Metro." },
-        { cmd: "!feriados", desc: "Muestra los próximos feriados." },
-        { cmd: "!far <comuna>", desc: "Farmacias de turno." },
-        { cmd: "!clima <ciudad>", desc: "El tiempo en tu ciudad." },
-        { cmd: "!sismos", desc: "Últimos sismos en Chile." },
-        { cmd: "!bus <paradero>", desc: "Próximas llegadas de buses." },
-        { cmd: "!sec", desc: "Reclamos por cortes de luz." },
-        { cmd: "!valores", desc: "Indicadores económicos." },
-        { cmd: "!bencina <comuna>", desc: "Bencineras más baratas." },
-        { cmd: "!horoscopo <signo>", desc: "Tu horóscopo diario." },
-        { cmd: "!trstatus", desc: "Estado del traductor de DeepL." },
-        { cmd: "!bolsa", desc: "Estado de la bolsa de Santiago." }
+    "UTILIDAD ⚙️": [
+        { cmd: "!ping", desc: "Mide la latencia del bot 핑" },
+        { cmd: "!metro", desc: "Estado de la red de Metro 🚇" },
+        { cmd: "!feriados", desc: "Muestra los próximos feriados 🗓️" },
+        { cmd: "!far <comuna>", desc: "Farmacias de turno ⚕️" },
+        { cmd: "!clima <ciudad>", desc: "El tiempo en tu ciudad 🌦️" },
+        { cmd: "!sismos", desc: "Últimos sismos en Chile 🌋" },
+        { cmd: "!bus <paradero>", desc: "Próximas llegadas de buses 🚌" },
+        { cmd: "!sec", desc: "Reclamos por cortes de luz 💡" },
+        { cmd: "!valores", desc: "Indicadores económicos 💸" },
+        { cmd: "!bencina <comuna>", desc: "Bencineras más baratas ⛽" },
+        { cmd: "!horoscopo <signo>", desc: "Tu horóscopo diario 🔮" },
+        { cmd: "!trstatus", desc: "Estado del traductor de DeepL 🌐" },
+        { cmd: "!bolsa", desc: "Estado de la bolsa de Santiago 📈" }
     ],
-    "FÚTBOL": [
-        { cmd: "!tabla", desc: "Tabla de posiciones del torneo nacional." },
-        { cmd: "!prox", desc: "Próximos partidos del torneo." },
-        { cmd: "!partidos", desc: "Partidos de la fecha actual." },
-        { cmd: "!tclasi", desc: "Tabla de clasificatorias." },
-        { cmd: "!clasi", desc: "Partidos de clasificatorias." }
+    "FÚTBOL ⚽": [
+        { cmd: "!tabla", desc: "Tabla de posiciones del torneo nacional 🏆" },
+        { cmd: "!prox", desc: "Próximos partidos del torneo 🔜" },
+        { cmd: "!partidos", desc: "Partidos de la fecha actual 📅" },
+        { cmd: "!tclasi", desc: "Tabla de clasificatorias 🇨🇱" },
+        { cmd: "!clasi", desc: "Partidos de clasificatorias 🇨🇱" }
     ],
-    "BÚSQUEDA": [
-        { cmd: "!wiki <búsqueda>", desc: "Busca en Wikipedia." },
-        { cmd: "!noticias", desc: "Noticias más recientes." },
-        { cmd: "!g <búsqueda>", desc: "Búsqueda rápida en Google." }
+    "BÚSQUEDA 🔍": [
+        { cmd: "!wiki <búsqueda>", desc: "Busca en Wikipedia 📚" },
+        { cmd: "!noticias", desc: "Noticias más recientes 📰" },
+        { cmd: "!g <búsqueda>", desc: "Búsqueda rápida en Google 🌐" }
     ],
-    "ENTRETENCIÓN": [
-        { cmd: "!s", desc: "Crea un sticker (respondiendo a imagen/video)." },
-        { cmd: "!toimg", desc: "Convierte un sticker a imagen/gif." },
-        { cmd: "!chiste", desc: "Te cuento un chiste en audio." },
-        { cmd: "!audios", desc: "Lista de comandos de audio." },
-        { cmd: "!banner <estilo> <texto>", desc: "Crea un banner." },
-        { cmd: "!texto <arriba> - <abajo>", desc: "Añade texto a una imagen." },
-        { cmd: "!18, !navidad, !añonuevo", desc: "Cuenta regresiva." }
+    "ENTRETENCIÓN 🎉": [
+        { cmd: "!s", desc: "Crea un sticker (respondiendo a imagen/video) 🖼️" },
+        { cmd: "!toimg", desc: "Convierte un sticker a imagen/gif �️" },
+        { cmd: "!chiste", desc: "Te cuento un chiste en audio 😂" },
+        { cmd: "!audios", desc: "Lista de comandos de audio 🎵" },
+        { cmd: "!banner <estilo> <texto>", desc: "Crea un banner ✨" },
+        { cmd: "!texto <arriba> - <abajo>", desc: "Añade texto a una imagen ✍️" },
+        { cmd: "!18, !navidad, !añonuevo", desc: "Cuenta regresiva ⏳" }
     ],
-    "JUEGOS": [
-        { cmd: "!ruleta", desc: "Gira la ruleta y gana puntos." },
-        { cmd: "!puntos", desc: "Muestra tus puntos acumulados." }
+    "JUEGOS 🎲": [
+        { cmd: "!ruleta", desc: "Gira la ruleta y gana puntos 🎰" },
+        { cmd: "!puntos", desc: "Muestra tus puntos acumulados 🏆" }
     ],
-    "OTROS": [
-        { cmd: "!ayuda <pregunta>", desc: "Pregúntale a la IA." },
-        { cmd: "!ticket", desc: "Crea un ticket de soporte." },
-        { cmd: "!caso <número>", desc: "Revisa el estado de un ticket." },
-        { cmd: "!id", desc: "Muestra el ID del chat." }
+    "OTROS 🤖": [
+        { cmd: "!ayuda <pregunta>", desc: "Pregúntale a la IA 🧠" },
+        { cmd: "!ticket", desc: "Crea un ticket de soporte 🎟️" },
+        { cmd: "!caso <número>", desc: "Revisa el estado de un ticket 🎫" },
+        { cmd: "!id", desc: "Muestra el ID del chat 🆔" }
     ]
 };
 
 // --- FUNCIÓN DE MENÚ MEJORADA ---
 function handleMenu() {
-    let menu = "*🤖 MENÚ DE COMANDOS BOTILLERO 🤖*\n\n";
+    let menu = "🤖 *¡Wena! Soy Botillero, tu asistente.* 🤖\n\n";
+    menu += "Aquí tení la lista actualizada de todas las weás que cacho hacer.\n";
+    menu += "_Usa `!` o `/` pa' los comandos, da lo mismo._\n\n";
 
     for (const categoria in menuConfig) {
         menu += `*--- ${categoria} ---*\n`;
         menuConfig[categoria].forEach(item => {
-            menu += `*${item.cmd}* - ${item.desc}\n`;
+            // Usamos un punto diferente para darle más estilo
+            menu += `◦ *${item.cmd}*: ${item.desc}\n`;
         });
         menu += "\n"; // Añade un espacio entre categorías
     }
@@ -222,6 +225,8 @@ async function handleSec(message) {
     return generateWhatsAppMessage(region);
 }
 
+// Se elimina handleFeriados de las exportaciones ya que no está definida en este archivo
+// y probablemente se maneja a través de python.service directamente en command.handler.js
 module.exports = { 
     handleFarmacias,
     handleClima,
