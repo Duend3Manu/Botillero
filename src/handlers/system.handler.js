@@ -1,110 +1,76 @@
-// src/handlers/system.handler.js
 "use strict";
 
 const os = require('os');
 const si = require('systeminformation');
 const axios = require('axios');
+const moment = require('moment-timezone');
+require('moment-duration-format');
+const { version } = require('../../package.json');
 
-// --- Funciones auxiliares para obtener métricas del sistema ---
-
-// Mide el tiempo de respuesta a Internet (ping)
+// --- Función para medir el ping a un servidor externo ---
 async function checkPing() {
     try {
         const start = Date.now();
-        await axios.get('https://www.google.cl');
-        const end = Date.now();
-        return end - start;
+        await axios.get('https://www.google.cl', { timeout: 5000 });
+        return `${Date.now() - start} ms`;
     } catch (error) {
-        console.error('Error al medir el ping:', error);
-        return null;
+        console.error('Error al medir el ping a Google:', error);
+        return 'No disponible';
     }
 }
 
-// Obtiene el uso de RAM
-function getRAMUsage() {
-    const totalRAM = os.totalmem();
-    const freeRAM = os.freemem();
-    const usedRAM = totalRAM - freeRAM;
-    return {
-        used: (usedRAM / 1024 / 1024).toFixed(2),
-        total: (totalRAM / 1024 / 1024).toFixed(2),
-        percentage: ((usedRAM / totalRAM) * 100).toFixed(2),
-    };
-}
-
-// Obtiene el uso de CPU
-function getCPUUsage() {
-    const cpus = os.cpus();
-    let totalIdle = 0;
-    let totalTick = 0;
-    cpus.forEach((cpu) => {
-        for (let type in cpu.times) {
-            totalTick += cpu.times[type];
-        }
-        totalIdle += cpu.times.idle;
-    });
-    const idle = totalIdle / cpus.length;
-    const total = totalTick / cpus.length;
-    const usage = 100 - (idle / total) * 100;
-    return {
-        usage: usage.toFixed(2),
-        model: cpus[0].model,
-    };
-}
-
-// Obtiene el uso de disco
-async function getDiskUsage() {
+// --- Función principal del manejador (unificada) ---
+async function handlePing(message, client) {
     try {
-        const disks = await si.fsSize();
-        const disk = disks[0]; // Tomar la primera partición
-        return {
-            used: (disk.used / 1024 / 1024 / 1024).toFixed(2),
-            total: (disk.size / 1024 / 1024 / 1024).toFixed(2),
-            percentage: disk.use.toFixed(2),
-        };
+        // --- Métricas del Bot (las que añadimos) ---
+        const botLatency = (Date.now() / 1000) - message.timestamp;
+        const botUptimeSeconds = process.uptime();
+        const botUptime = moment.duration(botUptimeSeconds, 'seconds').format("d[d], h[h], m[m], s[s]");
+        const botRamUsage = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
+        const chats = await client.getChats();
+        const chatCount = chats.length;
+
+        // --- Métricas del Servidor (tu lógica original) ---
+        const [pingTime, cpuInfo, ramInfo, diskInfo, osInfo] = await Promise.all([
+            checkPing(),
+            si.currentLoad(),
+            si.mem(),
+            si.fsSize(),
+            si.osInfo()
+        ]);
+
+        const mainDisk = diskInfo[0] || {}; // Tomamos el primer disco
+        const cpuUsage = cpuInfo.currentLoad.toFixed(2);
+        const ramUsage = ((ramInfo.total - ramInfo.free) / 1024 / 1024 / 1024).toFixed(2);
+        const totalRam = (ramInfo.total / 1024 / 1024 / 1024).toFixed(2);
+        const diskUsage = (mainDisk.used / 1024 / 1024 / 1024).toFixed(2);
+        const totalDisk = (mainDisk.size / 1024 / 1024 / 1024).toFixed(2);
+
+        // --- Construimos el mensaje de respuesta unificado ---
+        const response = `
+*🤖 Estado del Botillero y Sistema ⚙️*
+
+--- *BOT* ---
+◦ *Versión:* v${version} 📦
+◦ *Latencia:* ${botLatency.toFixed(3)} s 핑
+◦ *Tiempo Activo:* ${botUptime} ⏱️
+◦ *Uso de RAM:* ${botRamUsage} MB 💾
+◦ *Chats Activos:* ${chatCount} 💬
+
+--- *SERVIDOR* ---
+◦ *Plataforma:* ${osInfo.platform} (${osInfo.distro}) 💻
+◦ *Ping a Google:* ${pingTime} 🌐
+◦ *Uso de CPU:* ${cpuUsage}% ⚡
+◦ *Uso de RAM:* ${ramUsage} / ${totalRam} GB 🧠
+◦ *Uso de Disco:* ${diskUsage} / ${totalDisk} GB 💽
+        `.trim();
+
+        return response;
+
     } catch (error) {
-        console.error('Error al obtener el uso de disco:', error);
-        return null;
+        console.error("Error al generar el estado del sistema:", error);
+        return "Ucha, no pude obtener el estado completo del sistema. Algo falló.";
     }
-}
-
-// Formatea el tiempo de actividad del sistema
-function formatUptime(seconds) {
-    const days = Math.floor(seconds / (3600 * 24));
-    const hours = Math.floor((seconds % (3600 * 24)) / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return `${days}d ${hours}h ${minutes}m`;
-}
-
-// --- Función principal del manejador ---
-
-async function handlePing(message) {
-    const startCommandTime = Date.now();
-    
-    // Obtenemos todas las métricas en paralelo para mayor eficiencia
-    const [pingTime, ramUsage, cpuUsage, diskUsage] = await Promise.all([
-        checkPing(),
-        getRAMUsage(),
-        getCPUUsage(),
-        getDiskUsage()
-    ]);
-
-    const lag = Date.now() - startCommandTime;
-    const uptime = formatUptime(os.uptime());
-
-    // Construimos el mensaje de respuesta
-    const response = `
-*Estado del Sistema - Botillero* ⚙️
-    
-🏓 *Ping a Google:* ${pingTime} ms
-⏳ *Latencia del comando:* ${lag} ms
-💾 *RAM:* ${ramUsage.used} / ${ramUsage.total} MB (${ramUsage.percentage}%)
-⚡ *CPU:* ${cpuUsage.usage}% (${cpuUsage.model})
-💽 *Disco:* ${diskUsage.used} / ${diskUsage.total} GB (${diskUsage.percentage}%)
-⏱️ *Tiempo de actividad:* ${uptime}
-    `.trim();
-
-    return response;
 }
 
 module.exports = { handlePing };
