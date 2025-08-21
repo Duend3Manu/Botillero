@@ -19,7 +19,6 @@ const utilityService = require('../services/utility.service.js');
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');
 const { handleFeriados, handleFarmacias, handleClima, handleSismos, handleBus, handleSec, handleMenu } = require('./utility.handler');
-// --- MODIFICACIÓN 1: Importar las nuevas funciones de la ruleta ---
 const { handleSticker, handleStickerToMedia, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce, handleRuleta, handlePuntos } = require('./fun.handler');
 const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler');
 const { handleTicket, handleCaso } = require('./stateful.handler');
@@ -143,7 +142,8 @@ async function commandHandler(client, message) {
                 break;
 
             // --- Handlers ---
-            case 'ping': replyMessage = await handlePing(message); break;
+            // --- CORRECCIÓN ---
+            case 'ping': replyMessage = await handlePing(message, client); break;
             case 'feriados': replyMessage = await utilityService.getFeriados(); break;
             case 'far': replyMessage = await handleFarmacias(message); break;
             case 'clima': replyMessage = await handleClima(message); break;
@@ -170,7 +170,6 @@ async function commandHandler(client, message) {
             case 'imagen':
                 return handleStickerToMedia(client, message);
 
-            // --- MODIFICACIÓN 2: Añadir los nuevos comandos de la ruleta ---
             case 'ruleta':
                 return handleRuleta(client, message);
             
