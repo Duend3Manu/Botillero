@@ -301,10 +301,10 @@ async function handleOnce(client, message) {
     }
 }
 
-// --- LÓGICA PARA LA RULETA Y PUNTOS ---
+// --- LÓGICA PARA LA RULETA Y PUNTOS (CON ANTI-SPAM) ---
 
 const DB_PATH = path.join(__dirname, '..', '..', 'database', 'puntos.json');
-const COOLDOWN_SECONDS = 15; // 15 segundos de espera entre tiradas
+const COOLDOWN_SECONDS = 300; // 5 minutos de espera entre tiradas
 
 function leerPuntos() {
     if (!fs.existsSync(DB_PATH)) {
@@ -325,29 +325,47 @@ async function handleRuleta(client, message) {
     const contact = await message.getContact();
     const nombreUsuario = contact.pushname || contact.name || `Usuario-${userId.slice(0, 4)}`;
 
+    // Inicializar o actualizar datos del usuario
     if (!puntosData[userId]) {
         puntosData[userId] = {
             puntos: 0,
             ultimoJuego: null,
-            nombre: nombreUsuario
+            nombre: nombreUsuario,
+            notificadoCooldown: false // <-- Nueva bandera anti-spam
         };
     } else {
+        // Asegurarse de que los usuarios antiguos tengan la nueva bandera
+        if (puntosData[userId].notificadoCooldown === undefined) {
+            puntosData[userId].notificadoCooldown = false;
+        }
         puntosData[userId].nombre = nombreUsuario;
     }
 
     const ahora = moment();
     const ultimoJuego = puntosData[userId].ultimoJuego ? moment(puntosData[userId].ultimoJuego) : null;
 
+    // --- LÓGICA ANTI-SPAM ---
     if (ultimoJuego && ahora.diff(ultimoJuego, 'seconds') < COOLDOWN_SECONDS) {
+        // Si el usuario ya fue notificado, no hacemos NADA.
+        if (puntosData[userId].notificadoCooldown) {
+            return; // Salimos de la función silenciosamente.
+        }
+        
+        // Si no ha sido notificado, le enviamos el mensaje UNA VEZ.
         const tiempoRestante = COOLDOWN_SECONDS - ahora.diff(ultimoJuego, 'seconds');
-        return message.reply(`⏳ ¡Tranquilo, vaquero! Debes esperar ${tiempoRestante} segundos más para volver a girar la ruleta.`);
+        message.reply(`⏳ ¡Tranquilo, vaquero! Debes esperar ${tiempoRestante} segundos más para volver a girar la ruleta.`);
+        
+        // Marcamos al usuario como notificado y guardamos.
+        puntosData[userId].notificadoCooldown = true;
+        guardarPuntos(puntosData);
+        
+        return; // Salimos de la función.
     }
 
+    // --- LÓGICA DEL JUEGO (si no está en cooldown) ---
     const ruletaGifPath = path.join(__dirname, '..', '..', 'assets', 'ruleta.gif');
     if (fs.existsSync(ruletaGifPath)) {
         const media = MessageMedia.fromFilePath(ruletaGifPath);
-        // --- CORRECCIÓN FINAL ---
-        // Se envía el GIF con su leyenda en un solo mensaje para asegurar la animación.
         await client.sendMessage(message.from, media, { caption: 'Girando la ruleta... 🎰', sendVideoAsGif: true });
     } else {
         await message.reply('Girando la ruleta... 🎰');
@@ -375,8 +393,10 @@ async function handleRuleta(client, message) {
         }
     }
 
+    // Actualizar datos del usuario y REINICIAR la bandera anti-spam
     puntosData[userId].puntos += premioGanado.puntos;
     puntosData[userId].ultimoJuego = ahora.toISOString();
+    puntosData[userId].notificadoCooldown = false; // <-- Se reinicia para el próximo ciclo
     guardarPuntos(puntosData);
     
     let mensajeResultado = `*${nombreUsuario}*, la ruleta se detuvo y ganaste:\n\n🎉 *${premioGanado.nombre}* 🎉`;
