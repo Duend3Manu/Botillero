@@ -19,7 +19,7 @@ const utilityService = require('../services/utility.service.js');
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');
 const { handleFeriados, handleFarmacias, handleClima, handleSismos, handleBus, handleSec, handleMenu } = require('./utility.handler');
-const { handleSticker, handleStickerToMedia, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce, handleRuleta, handlePuntos } = require('./fun.handler');
+const { handleSticker, handleStickerToMedia, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce, handlenada, handlePuntos } = require('./fun.handler');
 const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler');
 const { handleTicket, handleCaso } = require('./stateful.handler');
 const { handleAiHelp } = require('./ai.handler');
@@ -170,8 +170,8 @@ async function commandHandler(client, message) {
             case 'imagen':
                 return handleStickerToMedia(client, message);
 
-            case 'ruleta':
-                return handleRuleta(client, message);
+            case 'nada':
+                return handlenada(client, message);
             
             case 'puntos':
             case 'score':

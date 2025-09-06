@@ -301,7 +301,7 @@ async function handleOnce(client, message) {
     }
 }
 
-// --- LÓGICA PARA LA RULETA Y PUNTOS (CON ANTI-SPAM) ---
+// --- LÓGICA PARA LA nada Y PUNTOS (CON ANTI-SPAM) ---
 
 const DB_PATH = path.join(__dirname, '..', '..', 'database', 'puntos.json');
 const COOLDOWN_SECONDS = 300; // 5 minutos de espera entre tiradas
@@ -319,7 +319,7 @@ function guardarPuntos(data) {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-async function handleRuleta(client, message) {
+async function handlenada(client, message) {
     const userId = message.author || message.from;
     const puntosData = leerPuntos();
     const contact = await message.getContact();
@@ -353,7 +353,7 @@ async function handleRuleta(client, message) {
         
         // Si no ha sido notificado, le enviamos el mensaje UNA VEZ.
         const tiempoRestante = COOLDOWN_SECONDS - ahora.diff(ultimoJuego, 'seconds');
-        message.reply(`⏳ ¡Tranquilo, vaquero! Debes esperar ${tiempoRestante} segundos más para volver a girar la ruleta.`);
+        message.reply(`⏳ ¡Tranquilo, vaquero! Debes esperar ${tiempoRestante} segundos más para volver a girar la nada.`);
         
         // Marcamos al usuario como notificado y guardamos.
         puntosData[userId].notificadoCooldown = true;
@@ -363,12 +363,12 @@ async function handleRuleta(client, message) {
     }
 
     // --- LÓGICA DEL JUEGO (si no está en cooldown) ---
-    const ruletaGifPath = path.join(__dirname, '..', '..', 'assets', 'ruleta.gif');
-    if (fs.existsSync(ruletaGifPath)) {
-        const media = MessageMedia.fromFilePath(ruletaGifPath);
-        await client.sendMessage(message.from, media, { caption: 'Girando la ruleta... 🎰', sendVideoAsGif: true });
+    const nadaGifPath = path.join(__dirname, '..', '..', 'assets', 'nada.gif');
+    if (fs.existsSync(nadaGifPath)) {
+        const media = MessageMedia.fromFilePath(nadaGifPath);
+        await client.sendMessage(message.from, media, { caption: 'Girando la nada... 🎰', sendVideoAsGif: true });
     } else {
-        await message.reply('Girando la ruleta... 🎰');
+        await message.reply('Girando la nada... 🎰');
     }
 
     await new Promise(resolve => setTimeout(resolve, 4000));
@@ -399,7 +399,7 @@ async function handleRuleta(client, message) {
     puntosData[userId].notificadoCooldown = false; // <-- Se reinicia para el próximo ciclo
     guardarPuntos(puntosData);
     
-    let mensajeResultado = `*${nombreUsuario}*, la ruleta se detuvo y ganaste:\n\n🎉 *${premioGanado.nombre}* 🎉`;
+    let mensajeResultado = `*${nombreUsuario}*, la nada se detuvo y ganaste:\n\n🎉 *${premioGanado.nombre}* 🎉`;
     mensajeResultado += `\n\nAhora tienes un total de *${puntosData[userId].puntos}* puntos.`;
 
     if (premioGanado.puntos > 0) {
@@ -423,7 +423,7 @@ async function handlePuntos(client, message) {
     const puntosData = leerPuntos();
 
     if (!puntosData[userId] || puntosData[userId].puntos === 0) {
-        return message.reply("Aún no tienes puntos. ¡Usa `!ruleta` para empezar a ganar!");
+        return message.reply("Aún no tienes puntos. ¡Usa `!nada` para empezar a ganar!");
     }
 
     const contact = await message.getContact();
@@ -443,6 +443,6 @@ module.exports = {
     handleCountdown,
     handleBotMention,
     handleOnce,
-    handleRuleta,
+    handlenada,
     handlePuntos
 };

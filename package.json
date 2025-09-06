@@ -27,7 +27,7 @@
     "sharp": "^0.34.3",
     "sqlite3": "^5.1.7",
     "systeminformation": "^5.27.7",
-    "whatsapp-web.js": "^1.33.1",
+    "whatsapp-web.js": "^1.34.0",
     "whois": "^2.15.0"
   }
 }

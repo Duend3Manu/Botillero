@@ -123,7 +123,7 @@ def get_xkcd_comic():
 
 
 if __name__ == "__main__":
-    # Actualizamos la ruleta con todas las nuevas opciones
+    # Actualizamos la nada con todas las nuevas opciones
     opciones = [
         get_efemeride, get_fun_fact, get_nasa_apod, get_quote_of_the_day,
         get_cartelera_cine, get_geek_joke, get_trago_del_dia, get_termino_geek,

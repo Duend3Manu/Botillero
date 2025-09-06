@@ -46,7 +46,7 @@ const menuConfig = {
         { cmd: "!18, !navidad, !añonuevo", desc: "Cuenta regresiva ⏳" }
     ],
     "JUEGOS 🎲": [
-        { cmd: "!ruleta", desc: "Gira la ruleta y gana puntos 🎰" },
+        { cmd: "!nada", desc: "Gira la nada y gana puntos 🎰" },
         { cmd: "!puntos", desc: "Muestra tus puntos acumulados 🏆" }
     ],
     "OTROS 🤖": [
