@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
 const { MessageMedia } = require('whatsapp-web.js');
-// NO importamos 'sharp' aquí para evitar que el bot se caiga si no está instalado.
 
 // --- Lógica para Stickers ---
 async function handleSticker(client, message) {
@@ -29,16 +28,14 @@ async function handleSticker(client, message) {
     }
 }
 
-// --- FUNCIÓN CON CARGA SEGURA DE SHARP ---
 async function handleStickerToMedia(client, message) {
+    // Implementación con carga segura de 'sharp'
     let sharp;
     try {
         sharp = require('sharp');
     } catch (err) {
         console.error("----------- ERROR CRÍTICO: FALTA LA LIBRERÍA 'SHARP' -----------");
-        console.error("La librería 'sharp' no se pudo cargar. Es probable que no se haya instalado correctamente.");
         console.error("Por favor, detén el bot y ejecuta 'npm install sharp' en tu terminal y luego reinícialo.");
-        console.error(err);
         return message.reply("❌ Error: La función para convertir imágenes no está disponible. El administrador debe instalar la librería 'sharp'.");
     }
 
@@ -49,7 +46,7 @@ async function handleStickerToMedia(client, message) {
     const quotedMsg = await message.getQuotedMessage();
 
     if (!quotedMsg.hasMedia || quotedMsg.type !== 'sticker') {
-        return message.reply("Eso no parece ser un sticker. Por favor, responde a un sticker para convertirlo.");
+        return message.reply("Eso no parece ser un sticker.");
     }
 
     await message.react('⏳');
@@ -149,18 +146,21 @@ function handleAudioList() {
     return header + commandList;
 }
 
-async function handleSound(client, message, command) {
+// --- FUNCIÓN DE SONIDO MODIFICADA ---
+async function handleSound(client, commandMessage, reactionTarget, command) {
     const soundInfo = soundMap[command];
     if (!soundInfo) return;
 
     const audioPath = path.join(__dirname, '..', '..', 'mp3', soundInfo.file);
 
     if (fs.existsSync(audioPath)) {
-        await message.react(soundInfo.reaction);
+        // Reacciona al mensaje objetivo (que puede ser el original o el citado)
+        await reactionTarget.react(soundInfo.reaction);
         const media = MessageMedia.fromFilePath(audioPath);
-        message.reply(media, undefined, { sendAudioAsVoice: true });
+        // Responde al mensaje que contenía el comando
+        commandMessage.reply(media, undefined, { sendAudioAsVoice: true });
     } else {
-        message.reply(`No se encontró el archivo de audio para "!${command}".`);
+        commandMessage.reply(`No se encontró el archivo de audio para "!${command}".`);
         console.error(`Archivo no encontrado: ${audioPath}`);
     }
 }
@@ -301,7 +301,7 @@ async function handleOnce(client, message) {
     }
 }
 
-// --- LÓGICA PARA LA nada Y PUNTOS (CON ANTI-SPAM) ---
+// --- LÓGICA PARA LA RULETA Y PUNTOS (CON ANTI-SPAM) ---
 
 const DB_PATH = path.join(__dirname, '..', '..', 'database', 'puntos.json');
 const COOLDOWN_SECONDS = 300; // 5 minutos de espera entre tiradas
@@ -319,22 +319,20 @@ function guardarPuntos(data) {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-async function handlenada(client, message) {
+async function handleRuleta(client, message) {
     const userId = message.author || message.from;
     const puntosData = leerPuntos();
     const contact = await message.getContact();
     const nombreUsuario = contact.pushname || contact.name || `Usuario-${userId.slice(0, 4)}`;
 
-    // Inicializar o actualizar datos del usuario
     if (!puntosData[userId]) {
         puntosData[userId] = {
             puntos: 0,
             ultimoJuego: null,
             nombre: nombreUsuario,
-            notificadoCooldown: false // <-- Nueva bandera anti-spam
+            notificadoCooldown: false
         };
     } else {
-        // Asegurarse de que los usuarios antiguos tengan la nueva bandera
         if (puntosData[userId].notificadoCooldown === undefined) {
             puntosData[userId].notificadoCooldown = false;
         }
@@ -344,31 +342,26 @@ async function handlenada(client, message) {
     const ahora = moment();
     const ultimoJuego = puntosData[userId].ultimoJuego ? moment(puntosData[userId].ultimoJuego) : null;
 
-    // --- LÓGICA ANTI-SPAM ---
     if (ultimoJuego && ahora.diff(ultimoJuego, 'seconds') < COOLDOWN_SECONDS) {
-        // Si el usuario ya fue notificado, no hacemos NADA.
         if (puntosData[userId].notificadoCooldown) {
-            return; // Salimos de la función silenciosamente.
+            return;
         }
         
-        // Si no ha sido notificado, le enviamos el mensaje UNA VEZ.
         const tiempoRestante = COOLDOWN_SECONDS - ahora.diff(ultimoJuego, 'seconds');
-        message.reply(`⏳ ¡Tranquilo, vaquero! Debes esperar ${tiempoRestante} segundos más para volver a girar la nada.`);
+        message.reply(`⏳ ¡Tranquilo, vaquero! Debes esperar ${tiempoRestante} segundos más para volver a girar la ruleta.`);
         
-        // Marcamos al usuario como notificado y guardamos.
         puntosData[userId].notificadoCooldown = true;
         guardarPuntos(puntosData);
         
-        return; // Salimos de la función.
+        return;
     }
 
-    // --- LÓGICA DEL JUEGO (si no está en cooldown) ---
-    const nadaGifPath = path.join(__dirname, '..', '..', 'assets', 'nada.gif');
-    if (fs.existsSync(nadaGifPath)) {
-        const media = MessageMedia.fromFilePath(nadaGifPath);
-        await client.sendMessage(message.from, media, { caption: 'Girando la nada... 🎰', sendVideoAsGif: true });
+    const ruletaGifPath = path.join(__dirname, '..', '..', 'assets', 'ruleta.gif');
+    if (fs.existsSync(ruletaGifPath)) {
+        const media = MessageMedia.fromFilePath(ruletaGifPath);
+        await client.sendMessage(message.from, media, { caption: 'Girando la ruleta... 🎰', sendVideoAsGif: true });
     } else {
-        await message.reply('Girando la nada... 🎰');
+        await message.reply('Girando la ruleta... 🎰');
     }
 
     await new Promise(resolve => setTimeout(resolve, 4000));
@@ -393,13 +386,12 @@ async function handlenada(client, message) {
         }
     }
 
-    // Actualizar datos del usuario y REINICIAR la bandera anti-spam
     puntosData[userId].puntos += premioGanado.puntos;
     puntosData[userId].ultimoJuego = ahora.toISOString();
-    puntosData[userId].notificadoCooldown = false; // <-- Se reinicia para el próximo ciclo
+    puntosData[userId].notificadoCooldown = false;
     guardarPuntos(puntosData);
     
-    let mensajeResultado = `*${nombreUsuario}*, la nada se detuvo y ganaste:\n\n🎉 *${premioGanado.nombre}* 🎉`;
+    let mensajeResultado = `*${nombreUsuario}*, la ruleta se detuvo y ganaste:\n\n🎉 *${premioGanado.nombre}* 🎉`;
     mensajeResultado += `\n\nAhora tienes un total de *${puntosData[userId].puntos}* puntos.`;
 
     if (premioGanado.puntos > 0) {
@@ -423,7 +415,7 @@ async function handlePuntos(client, message) {
     const puntosData = leerPuntos();
 
     if (!puntosData[userId] || puntosData[userId].puntos === 0) {
-        return message.reply("Aún no tienes puntos. ¡Usa `!nada` para empezar a ganar!");
+        return message.reply("Aún no tienes puntos. ¡Usa `!ruleta` para empezar a ganar!");
     }
 
     const contact = await message.getContact();
@@ -443,6 +435,6 @@ module.exports = {
     handleCountdown,
     handleBotMention,
     handleOnce,
-    handlenada,
+    handleRuleta,
     handlePuntos
 };

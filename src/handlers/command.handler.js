@@ -3,7 +3,7 @@
 const { MessageMedia } = require('whatsapp-web.js');
 const fs = require('fs');
 
-// --- Importaciones de Servicios (Python) ---
+// --- Importaciones de Servicios (Python y otros) ---
 const metroService = require('../services/metro.service');
 const nationalTeamService = require('../services/nationalTeam.service');
 const economyService = require('../services/economy.service');
@@ -15,57 +15,83 @@ const bannerService = require('../services/banner.service.js');
 const textoService = require('../services/texto.service.js');
 const networkService = require('../services/network.service.js');
 const utilityService = require('../services/utility.service.js');
+// const rutificadorService = require('../services/rutificador.service.js'); // Eliminado
 
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');
 const { handleFeriados, handleFarmacias, handleClima, handleSismos, handleBus, handleSec, handleMenu } = require('./utility.handler');
-const { handleSticker, handleStickerToMedia, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce, handlenada, handlePuntos } = require('./fun.handler');
+const { handleSticker, handleStickerToMedia, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce, handleRuleta, handlePuntos } = require('./fun.handler');
 const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler');
 const { handleTicket, handleCaso } = require('./stateful.handler');
 const { handleAiHelp } = require('./ai.handler');
-const { handlePhoneSearch, handleTneSearch, handlePatenteSearch } = require('./personalsearch.handler');
+const { handlePhoneSearch, handleTneSearch, handlePatenteSearch } = require('./personalsearch.handler'); // Eliminado handleRutSearch
 const { handleNetworkQuery, handleNicClSearch } = require('./network.handler');
 
 // --- Utilidades ---
 const soundCommands = getSoundCommands();
 const countdownCommands = ['18', 'navidad', 'añonuevo'];
 
-function getArgs(message) {
-    return message.body.trim().split(/\s+/).slice(1);
+// Esta función ahora es interna y se usa de forma diferente
+function getArgs(body) {
+    return body.trim().split(/\s+/).slice(1);
 }
 
 async function commandHandler(client, message) {
-    const rawText = message.body.toLowerCase().trim();
+    const rawTextLower = message.body.toLowerCase();
 
     try {
-        // --- Menciones y comandos especiales ---
-        if (/\b(bot|boot|bott|bbot)\b/.test(rawText)) {
+        // --- Menciones y comandos especiales (se ejecutan primero) ---
+        if (/\b(bot|boot|bott|bbot)\b/.test(rawTextLower)) {
             return handleBotMention(client, message);
         }
-        if (/\b(once|onse|11)\b/.test(rawText)) {
+        if (/\b(once|onse|11)\b/.test(rawTextLower)) {
             return handleOnce(client, message);
         }
 
-        if (!rawText.startsWith('!') && !rawText.startsWith('/')) {
+        // --- NUEVA LÓGICA DE DETECCIÓN DE COMANDOS ---
+        const commandMatch = message.body.match(/(?:!|\/)(\w+)/);
+
+        // Si no se encuentra un patrón como !comando en todo el texto, no hace nada más.
+        if (!commandMatch) {
             return;
         }
 
-        const command = rawText.substring(1).split(' ')[0];
+        // commandMatch[0] es el comando con prefijo (ej: "!metro")
+        // commandMatch[1] es solo el comando (ej: "metro")
+        const command = commandMatch[1].toLowerCase();
+        
+        // Para que el resto de la lógica de argumentos funcione, "simulamos"
+        // que el mensaje empieza con el comando encontrado.
+        const commandStartIndex = message.body.indexOf(commandMatch[0]);
+        const simulatedBody = message.body.substring(commandStartIndex);
+        
+        // Creamos un objeto de mensaje modificado para no alterar el original.
+        // Los handlers que necesiten leer argumentos usarán este objeto.
+        const modifiedMessage = { ...message, body: simulatedBody };
+
         let replyMessage;
 
-        console.log(`(Handler) -> Comando recibido: "${command}"`);
+        console.log(`(Handler) -> Comando detectado: "${command}" en el texto: "${message.body}"`);
 
         // --- Comandos de sonido y countdown ---
         if (soundCommands.includes(command)) {
-            return handleSound(client, message, command);
+            // NUEVA LÓGICA DE REACCIÓN CONTEXTUAL
+            let reactionTarget = message; // Por defecto, reacciona al propio comando
+            if (message.hasQuotedMsg) {
+                // Si es una respuesta, el objetivo de la reacción es el mensaje citado
+                reactionTarget = await message.getQuotedMessage();
+            }
+            // Se le pasa el mensaje del comando para la respuesta y el mensaje objetivo para la reacción
+            return handleSound(client, message, reactionTarget, command);
         }
         if (countdownCommands.includes(command)) {
             replyMessage = handleCountdown(command);
             return message.reply(replyMessage);
         }
 
+        // El switch ahora opera con el comando extraído
+        // Y le pasamos el "modifiedMessage" a los handlers que leen argumentos
         switch (command) {
-            // --- Comandos con mensaje de "cargando..." ---
             case 'tabla':
             case 'ligatabla':
                 messagingService.sendLoadingMessage(message);
@@ -80,17 +106,23 @@ async function commandHandler(client, message) {
                 messagingService.sendLoadingMessage(message);
                 replyMessage = await getMatchDaySummary();
                 break;
-            case 'metro':
+            
+            case 'metro': {
                 messagingService.sendLoadingMessage(message);
-                replyMessage = await metroService.getMetroStatus();
+                const metroResult = await metroService.getMetroStatus();
+                if (metroResult.type === 'video') {
+                    const media = MessageMedia.fromFilePath(metroResult.path);
+                    return client.sendMessage(message.from, media, { caption: metroResult.caption });
+                } else {
+                    replyMessage = metroResult.content;
+                }
                 break;
+            }
 
-            // --- Comando random ---
             case 'random':
                 try {
                     messagingService.sendLoadingMessage(message);
                     const randomInfo = await utilityService.getRandomInfo();
-
                     if (typeof randomInfo === 'object' && randomInfo.type === 'image') {
                         const media = await MessageMedia.fromUrl(randomInfo.url, { unsafeMime: true });
                         await client.sendMessage(message.from, media, { caption: randomInfo.caption });
@@ -105,7 +137,6 @@ async function commandHandler(client, message) {
                 }
                 return;
 
-            // --- Otros Servicios (Python) ---
             case 'tclasi': case 'selecciontabla':
                 replyMessage = await nationalTeamService.getQualifiersTable();
                 break;
@@ -116,7 +147,7 @@ async function commandHandler(client, message) {
                 replyMessage = await economyService.getEconomicIndicators();
                 break;
             case 'horoscopo': {
-                const signo = getArgs(message)[0];
+                const signo = getArgs(modifiedMessage.body)[0];
                 if (!signo) {
                     replyMessage = "Por favor, escribe un signo. Ej: `!horoscopo aries`";
                 } else {
@@ -130,7 +161,7 @@ async function commandHandler(client, message) {
                 return;
             }
             case 'bencina': {
-                const comuna = getArgs(message)[0];
+                const comuna = getArgs(modifiedMessage.body)[0];
                 replyMessage = await externalService.getBencinaData(comuna);
                 break;
             }
@@ -141,46 +172,36 @@ async function commandHandler(client, message) {
                 replyMessage = await externalService.getBolsaData();
                 break;
 
-            // --- Handlers ---
-            // --- CORRECCIÓN ---
             case 'ping': replyMessage = await handlePing(message, client); break;
             case 'feriados': replyMessage = await utilityService.getFeriados(); break;
-            case 'far': replyMessage = await handleFarmacias(message); break;
-            case 'clima': replyMessage = await handleClima(message); break;
+            case 'far': replyMessage = await handleFarmacias(modifiedMessage); break;
+            case 'clima': replyMessage = await handleClima(modifiedMessage); break;
             case 'sismos': replyMessage = await handleSismos(); break;
-            case 'bus': return handleBus(message, client);
-            case 'sec': case 'secrm': replyMessage = await handleSec(message); break;
+            case 'bus': return handleBus(modifiedMessage, client);
+            case 'sec': case 'secrm': replyMessage = await handleSec(modifiedMessage); break;
             case 'menu': case 'comandos': replyMessage = handleMenu(); break;
-            case 'wiki': replyMessage = await handleWikiSearch(message); break;
-            case 'noticias': replyMessage = await handleNews(message); break;
-            case 'g': replyMessage = await handleGoogleSearch(message); break;
-            case 'pat': case 'patente': return handlePatenteSearch(message);
+            case 'wiki': replyMessage = await handleWikiSearch(modifiedMessage); break;
+            case 'noticias': replyMessage = await handleNews(); break;
+            case 'g': replyMessage = await handleGoogleSearch(modifiedMessage); break;
+            case 'pat': case 'patente': return handlePatenteSearch(modifiedMessage);
+            // case 'rut': case 'nombre': return handleRutSearch(modifiedMessage); // Eliminado
             case 's': return handleSticker(client, message);
+            case 'toimg': case 'imagen': return handleStickerToMedia(client, message);
             case 'audios': case 'sonidos': replyMessage = handleAudioList(); break;
             case 'chiste': return handleJoke(client, message);
-            case 'ticket': case 'ticketr': case 'tickete': replyMessage = handleTicket(message); break;
-            case 'caso': case 'ecaso': case 'icaso': replyMessage = await handleCaso(message); break;
-            case 'ayuda': replyMessage = await handleAiHelp(message); break;
-            case 'num': case 'tel': return handlePhoneSearch(client, message);
+            case 'ticket': case 'ticketr': case 'tickete': replyMessage = handleTicket(modifiedMessage); break;
+            case 'caso': case 'ecaso': case 'icaso': replyMessage = await handleCaso(modifiedMessage); break;
+            case 'ayuda': replyMessage = await handleAiHelp(modifiedMessage); break;
+            case 'num': case 'tel': return handlePhoneSearch(client, modifiedMessage);
             case 'id':
                 message.reply(`ℹ️ El ID de este chat es:\n${message.from}`);
                 return;
+            case 'ruleta': return handleRuleta(client, message);
+            case 'puntos': case 'score': return handlePuntos(client, message);
 
-            case 'toimg':
-            case 'imagen':
-                return handleStickerToMedia(client, message);
-
-            case 'nada':
-                return handlenada(client, message);
-            
-            case 'puntos':
-            case 'score':
-                return handlePuntos(client, message);
-
-            // --- COMANDOS DE RED ---
             case 'net':
             case 'whois': {
-                const domainToAnalyze = getArgs(message)[0];
+                const domainToAnalyze = getArgs(modifiedMessage.body)[0];
                 if (!domainToAnalyze) {
                     return message.reply("Por favor, dame un dominio o IP para analizar. Ej: `!net google.com`");
                 }
@@ -195,7 +216,6 @@ async function commandHandler(client, message) {
                     setTimeout(() => {
                         try {
                             fs.unlinkSync(cleanFilePath);
-                            console.log(`(Limpieza) -> Archivo temporal ${cleanFilePath} eliminado.`);
                         } catch (err) {
                             console.error(`(Limpieza) -> Error al eliminar el archivo temporal: ${err.message}`);
                         }
@@ -204,9 +224,8 @@ async function commandHandler(client, message) {
                 return;
             }
 
-            // --- Banner ---
             case 'banner': {
-                const args = getArgs(message);
+                const args = getArgs(modifiedMessage.body);
                 if (args.length < 2) {
                     return message.reply("Formato incorrecto. Usa: `!banner <estilo> <texto>`.\n\nEstilos disponibles: `vengadores`, `shrek`, `mario`, `nintendo`, `sega`, `potter`, `starwars`,`disney`, `stranger`.");
                 }
@@ -224,7 +243,6 @@ async function commandHandler(client, message) {
                 return;
             }
 
-            // --- Texto en imagen ---
             case 'texto': {
                 let imageMsg_texto = null;
                 if (message.hasMedia) {
@@ -238,7 +256,7 @@ async function commandHandler(client, message) {
                 if (!imageMsg_texto) {
                     return message.reply("Para agregar texto, envía una imagen con el comando en el comentario, o responde a una imagen.");
                 }
-                const textoCompleto = message.body.substring(message.body.indexOf(' ') + 1);
+                const textoCompleto = getArgs(modifiedMessage.body).join(' ');
                 if (!textoCompleto.includes('-')) {
                     return message.reply("Formato incorrecto. Usa: `!texto texto arriba - texto abajo`");
                 }
@@ -262,7 +280,10 @@ async function commandHandler(client, message) {
                 return;
             }
 
-            default: break;
+            default: 
+                // Si el comando extraído no está en el switch, no hacemos nada.
+                // Esto evita que el bot responda a cualquier palabra que empiece con "!"
+                break;
         }
 
         if (replyMessage) {
