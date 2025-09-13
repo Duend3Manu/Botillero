@@ -1,4 +1,11 @@
 import sys
+import io
+
+# --- ¡LA CORRECCIÓN CLAVE! ---
+# Forzamos a que la salida estándar (lo que se imprime) use siempre la codificación UTF-8.
+# Esto asegura que los emojis y caracteres especiales se envíen correctamente.
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 import socket
 import whois
 import dns.resolver
@@ -9,40 +16,40 @@ from datetime import datetime
 
 def analyze_nic_cl(domain, ip_address):
     """
-    --- ¡NUEVO! ---
     Realiza un análisis especializado para dominios .cl consultando directamente a NIC Chile.
     """
     report = [f"🔍 *Análisis para dominio chileno:* `{domain}` ({ip_address})\n"]
     
-    # --- 1. WHOIS específico para NIC Chile ---
+    # --- WHOIS específico para NIC Chile ---
     try:
         report.append("--- 🇨🇱 WHOIS (NIC Chile) ---")
-        # Forzamos la consulta al servidor oficial de NIC Chile
         w = whois.whois(domain, server='whois.nic.cl')
         
-        # El resultado de NIC.cl viene como un texto plano que debemos procesar
-        # Es usual que no entregue datos del titular por privacidad.
         if w and w.text:
             lines = w.text.splitlines()
-            # Buscamos las líneas que nos interesan
+            found_data = False
             for line in lines:
                 if "Fecha de creación:" in line:
                     report.append(f"Creado: `{line.split(':')[1].strip()}`")
+                    found_data = True
                 if "Fecha de expiración:" in line:
                     report.append(f"Expira: `{line.split(':')[1].strip()}`")
+                    found_data = True
                 if "Servidores de nombre:" in line:
-                    # Limpiamos y formateamos los servidores de nombres
                     ns_line = line.split(':')[1].strip()
                     ns_list = ', '.join(ns_line.split())
                     report.append(f"Servidores de Nombre: `{ns_list}`")
+                    found_data = True
+            if not found_data:
+                 report.append("⚠️ No se encontraron datos públicos de registro (puede ser por privacidad).")
         else:
-             report.append("⚠️ No se pudo obtener información detallada de NIC Chile.")
+             report.append("⚠️ No se pudo obtener respuesta de NIC Chile.")
     except Exception as e:
         report.append(f"⚠️ Error al consultar a NIC Chile: {e}")
     
     report.append("") # Espacio
     
-    # --- 2. Escaneo de Puertos Comunes (lo mantenemos para .cl) ---
+    # --- Escaneo de Puertos Comunes ---
     common_ports = {21:"FTP", 22:"SSH", 80:"HTTP", 443:"HTTPS", 3306:"MySQL", 8080:"HTTP-Proxy"}
     open_ports = []
     for port, service in common_ports.items():
@@ -60,14 +67,11 @@ def analyze_nic_cl(domain, ip_address):
         
     return "\n".join(report)
 
-
 def analyze_international_domain(domain, ip_address):
     """
     Realiza el análisis completo para dominios internacionales (no .cl).
     """
     report = [f"🔍 *Análisis para:* `{domain}` ({ip_address})\n"]
-
-    # --- GeoIP, SSL, DNS, WHOIS, Puertos (como antes) ---
     try:
         geo_info = ipapi.location(ip=ip_address, output='json')
         report.append("--- 📍 GeoIP ---")
@@ -76,7 +80,6 @@ def analyze_international_domain(domain, ip_address):
         report.append(f"ISP: `{geo_info.get('org', 'N/A')}`\n")
     except Exception as e:
         report.append("--- 📍 GeoIP ---\n⚠️ No se pudo obtener la información de geolocalización.\n")
-
     try:
         report.append("--- 🛡️ SSL & Servidor ---")
         headers = requests.head(f"https://{domain}", timeout=5, allow_redirects=True).headers
@@ -92,7 +95,6 @@ def analyze_international_domain(domain, ip_address):
         report.append(f"Expira el: `{valid_to.strftime('%Y-%m-%d')}`\n")
     except Exception as e:
         report.append("⚠️ No se pudo obtener la información del servidor o certificado SSL.\n")
-
     try:
         report.append("--- 🌐 Registros DNS ---")
         a_records = ', '.join([str(r) for r in dns.resolver.resolve(domain, 'A')])
@@ -103,7 +105,6 @@ def analyze_international_domain(domain, ip_address):
         report.append(f"*MX (Correo):* `{mx_records}`\n")
     except Exception as e:
         report.append("⚠️ No se pudieron obtener todos los registros DNS.\n")
-
     try:
         report.append("--- ℹ️ WHOIS ---")
         w = whois.whois(domain)
@@ -114,7 +115,6 @@ def analyze_international_domain(domain, ip_address):
         report.append(f"Expira: `{expiration_date.strftime('%Y-%m-%d') if expiration_date else 'N/A'}`\n")
     except Exception as e:
         report.append("⚠️ No se pudo obtener la información de WHOIS.\n")
-        
     common_ports = {21:"FTP", 22:"SSH", 80:"HTTP", 443:"HTTPS", 3306:"MySQL", 3389:"RDP", 8080:"HTTP-Proxy"}
     open_ports = []
     for port, service in common_ports.items():
@@ -123,35 +123,25 @@ def analyze_international_domain(domain, ip_address):
         if sock.connect_ex((ip_address, port)) == 0:
             open_ports.append(f"✅ `{port}/{service}`")
         sock.close()
-    
     report.append("--- 📡 Puertos Comunes ---")
     if open_ports:
         report.append("\n".join(open_ports))
     else:
         report.append("❌ No se encontraron puertos comunes abiertos.")
-
     return "\n".join(report)
-
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Uso: python net_analyzer.py <dominio_o_ip>", file=sys.stderr)
         sys.exit(1)
-    
     target = sys.argv[1].lower()
-    
     try:
         ip_address = socket.gethostbyname(target)
-        
-        # --- ¡LÓGICA PRINCIPAL MEJORADA! ---
-        # Decidimos qué función usar basándonos en la terminación del dominio.
         if target.endswith('.cl'):
             full_report = analyze_nic_cl(target, ip_address)
         else:
             full_report = analyze_international_domain(target, ip_address)
-            
         print(full_report)
-        
     except socket.gaierror:
         print(f"❌ No se pudo resolver el dominio '{target}'. ¿Está escrito correctamente?", file=sys.stderr)
         sys.exit(1)
