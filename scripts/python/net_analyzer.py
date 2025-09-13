@@ -1,124 +1,160 @@
-# net_analyzer.py (Versión que crea un archivo .txt)
 import sys
+import socket
 import whois
 import dns.resolver
 import ipapi
-import socket
 import ssl
 import requests
 from datetime import datetime
-import io
-import tempfile # Para crear archivos temporales
-import os
 
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
-# --- (Las funciones de conversión de país a bandera no cambian) ---
-COUNTRY_CODES = { 'US': 'United States', 'CA': 'Canada', 'GB': 'United Kingdom', 'DE': 'Germany', 'FR': 'France', 'AU': 'Australia', 'JP': 'Japan', 'CN': 'China', 'IN': 'India', 'BR': 'Brazil', 'RU': 'Russia', 'CL': 'Chile', 'AR': 'Argentina', 'MX': 'Mexico', 'IS': 'Iceland' }
-NAMES_TO_CODES = {v.lower(): k for k, v in COUNTRY_CODES.items()}
-def codigo_a_bandera(codigo):
-    if not isinstance(codigo, str) or len(codigo) != 2: return "🌐"
-    OFFSET = 0x1F1E6 - ord('A')
-    return chr(ord(codigo.upper()[0]) + OFFSET) + chr(ord(codigo.upper()[1]) + OFFSET)
-def nombre_a_bandera(nombre):
-    codigo = NAMES_TO_CODES.get(nombre.lower())
-    return codigo_a_bandera(codigo) if codigo else "🌐"
-
-def analizar_dominio(dominio):
-    # Usaremos una lista para ir guardando cada línea del reporte
-    reporte = []
+def analyze_nic_cl(domain, ip_address):
+    """
+    --- ¡NUEVO! ---
+    Realiza un análisis especializado para dominios .cl consultando directamente a NIC Chile.
+    """
+    report = [f"🔍 *Análisis para dominio chileno:* `{domain}` ({ip_address})\n"]
     
+    # --- 1. WHOIS específico para NIC Chile ---
     try:
-        ip = socket.gethostbyname(dominio)
-        reporte.append(f"🔍 Análisis para: *{dominio}* ({ip})\n")
-    except socket.gaierror:
-        print(f"❌ No se pudo resolver el dominio '{dominio}'. ¿Está bien escrito?")
-        return
-
-    # --- GeoIP ---
-    try:
-        geo_info = ipapi.location(ip, output='json')
-        codigo_pais = geo_info.get('country', 'N/A')
-        bandera = codigo_a_bandera(codigo_pais)
-        reporte.append("--- 📍 GeoIP (Ubicación del Servidor) ---")
-        reporte.append(f"{bandera} País: {geo_info.get('country_name', 'N/A')} ({codigo_pais})")
-        reporte.append(f"Ciudad: {geo_info.get('city', 'N/A')}, {geo_info.get('region', 'N/A')}")
-        reporte.append(f"ISP: {geo_info.get('org', 'N/A')}\n")
-    except Exception:
-        reporte.append("--- 📍 GeoIP ---\nNo se pudo obtener la información de geolocalización.\n")
-
-    # --- SSL & Servidor ---
-    if dominio != ip:
-        try:
-            reporte.append("--- 🛡️ SSL & Servidor ---")
-            headers = requests.head(f"https://{dominio}", timeout=5, allow_redirects=True).headers
-            reporte.append(f"Servidor Web: {headers.get('Server', 'No identificado')}")
-            ctx = ssl.create_default_context()
-            with ctx.wrap_socket(socket.socket(), server_hostname=dominio) as s:
-                s.connect((dominio, 443))
-                cert = s.getpeercert()
-            issuer = dict(x[0] for x in cert['issuer'])
-            valid_to = datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z')
-            reporte.append(f"Certificado SSL emitido por: {issuer.get('commonName', 'N/A')}")
-            reporte.append(f"Expira el: {valid_to.strftime('%d-%m-%Y')}\n")
-        except Exception:
-            reporte.append("No se pudo obtener la información del servidor o certificado SSL.\n")
-
-    # --- DNS Records ---
-    try:
-        reporte.append("--- 🌐 Registros DNS ---")
-        reporte.append(f"A (IPv4): {', '.join([str(r) for r in dns.resolver.resolve(dominio, 'A')])}")
-        reporte.append(f"NS (Servidores): {', '.join(sorted([str(r) for r in dns.resolver.resolve(dominio, 'NS')]))}")
-        reporte.append(f"MX (Correo): {', '.join(sorted([f'{r.preference} {r.exchange}' for r in dns.resolver.resolve(dominio, 'MX')]))}")
-        txt_records = [r.to_text() for r in dns.resolver.resolve(dominio, 'TXT')]
-        if txt_records:
-            reporte.append(f"TXT: {txt_records[0][:75].strip()}...")
-        reporte.append("")
-    except Exception:
-        reporte.append("No se pudieron obtener todos los registros DNS.\n")
-
-    # --- WHOIS ---
-    if dominio != ip:
-        try:
-            reporte.append("--- ℹ️ WHOIS (Información de Registro) ---")
-            w = whois.whois(dominio)
-            pais_registro = w.get('country')
-            if pais_registro:
-                bandera_registro = codigo_a_bandera(pais_registro) if len(pais_registro) == 2 else nombre_a_bandera(pais_registro)
-                reporte.append(f"{bandera_registro} País de Registro: {pais_registro}")
-            reporte.append(f"Registrado por: {w.registrar}")
-            creation_date = w.creation_date[0] if isinstance(w.creation_date, list) else w.creation_date
-            expiration_date = w.expiration_date[0] if isinstance(w.expiration_date, list) else w.expiration_date
-            reporte.append(f"Fecha Creación: {creation_date.strftime('%d-%m-%Y') if creation_date else 'N/A'}")
-            reporte.append(f"Fecha Expiración: {expiration_date.strftime('%d-%m-%Y') if expiration_date else 'N/A'}")
-            status = w.status
-            if status:
-                reporte.append(f"Estado: {', '.join(status) if isinstance(status, list) else status}")
-        except Exception:
-            reporte.append("No se pudo obtener la información de WHOIS.")
-
-    # --- Unimos todo el reporte en un solo texto ---
-    reporte_final_texto = "\n".join(reporte)
-    
-    # --- Guardamos el reporte en un archivo .txt temporal ---
-    temp_dir = tempfile.gettempdir()
-    nombre_archivo = f"analisis_{dominio.replace('.', '_')}.txt"
-    ruta_archivo = os.path.join(temp_dir, nombre_archivo)
-    
-    # Quitamos el formato de WhatsApp (*, _, etc.) para el archivo de texto
-    reporte_para_txt = reporte_final_texto.replace('*', '').replace('_', '')
-    with open(ruta_archivo, 'w', encoding='utf-8') as f:
-        f.write(reporte_para_txt)
+        report.append("--- 🇨🇱 WHOIS (NIC Chile) ---")
+        # Forzamos la consulta al servidor oficial de NIC Chile
+        w = whois.whois(domain, server='whois.nic.cl')
         
-    # --- Imprimimos el resultado para Node.js ---
-    # Usamos un delimitador único para separar el texto del chat y la ruta del archivo
-    print(reporte_final_texto)
-    print("|||FILE_PATH|||")
-    print(ruta_archivo)
+        # El resultado de NIC.cl viene como un texto plano que debemos procesar
+        # Es usual que no entregue datos del titular por privacidad.
+        if w and w.text:
+            lines = w.text.splitlines()
+            # Buscamos las líneas que nos interesan
+            for line in lines:
+                if "Fecha de creación:" in line:
+                    report.append(f"Creado: `{line.split(':')[1].strip()}`")
+                if "Fecha de expiración:" in line:
+                    report.append(f"Expira: `{line.split(':')[1].strip()}`")
+                if "Servidores de nombre:" in line:
+                    # Limpiamos y formateamos los servidores de nombres
+                    ns_line = line.split(':')[1].strip()
+                    ns_list = ', '.join(ns_line.split())
+                    report.append(f"Servidores de Nombre: `{ns_list}`")
+        else:
+             report.append("⚠️ No se pudo obtener información detallada de NIC Chile.")
+    except Exception as e:
+        report.append(f"⚠️ Error al consultar a NIC Chile: {e}")
+    
+    report.append("") # Espacio
+    
+    # --- 2. Escaneo de Puertos Comunes (lo mantenemos para .cl) ---
+    common_ports = {21:"FTP", 22:"SSH", 80:"HTTP", 443:"HTTPS", 3306:"MySQL", 8080:"HTTP-Proxy"}
+    open_ports = []
+    for port, service in common_ports.items():
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.5)
+        if sock.connect_ex((ip_address, port)) == 0:
+            open_ports.append(f"✅ `{port}/{service}`")
+        sock.close()
+    
+    report.append("--- 📡 Puertos Comunes ---")
+    if open_ports:
+        report.append("\n".join(open_ports))
+    else:
+        report.append("❌ No se encontraron puertos comunes abiertos.")
+        
+    return "\n".join(report)
+
+
+def analyze_international_domain(domain, ip_address):
+    """
+    Realiza el análisis completo para dominios internacionales (no .cl).
+    """
+    report = [f"🔍 *Análisis para:* `{domain}` ({ip_address})\n"]
+
+    # --- GeoIP, SSL, DNS, WHOIS, Puertos (como antes) ---
+    try:
+        geo_info = ipapi.location(ip=ip_address, output='json')
+        report.append("--- 📍 GeoIP ---")
+        report.append(f"País: `{geo_info.get('country_name', 'N/A')}`")
+        report.append(f"Ciudad: `{geo_info.get('city', 'N/A')}, {geo_info.get('region', 'N/A')}`")
+        report.append(f"ISP: `{geo_info.get('org', 'N/A')}`\n")
+    except Exception as e:
+        report.append("--- 📍 GeoIP ---\n⚠️ No se pudo obtener la información de geolocalización.\n")
+
+    try:
+        report.append("--- 🛡️ SSL & Servidor ---")
+        headers = requests.head(f"https://{domain}", timeout=5, allow_redirects=True).headers
+        report.append(f"Servidor Web: `{headers.get('Server', 'No identificado')}`")
+        ctx = ssl.create_default_context()
+        with ctx.wrap_socket(socket.socket(), server_hostname=domain) as s:
+            s.settimeout(5)
+            s.connect((domain, 443))
+            cert = s.getpeercert()
+        issuer = dict(x[0] for x in cert.get('issuer', []))
+        valid_to = datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z')
+        report.append(f"Certificado SSL emitido por: `{issuer.get('commonName', 'N/A')}`")
+        report.append(f"Expira el: `{valid_to.strftime('%Y-%m-%d')}`\n")
+    except Exception as e:
+        report.append("⚠️ No se pudo obtener la información del servidor o certificado SSL.\n")
+
+    try:
+        report.append("--- 🌐 Registros DNS ---")
+        a_records = ', '.join([str(r) for r in dns.resolver.resolve(domain, 'A')])
+        report.append(f"*A (IPv4):* `{a_records}`")
+        ns_records = ', '.join(sorted([str(r) for r in dns.resolver.resolve(domain, 'NS')]))
+        report.append(f"*NS:* `{ns_records}`")
+        mx_records = ', '.join(sorted([f'{r.preference} {r.exchange}' for r in dns.resolver.resolve(domain, 'MX')]))
+        report.append(f"*MX (Correo):* `{mx_records}`\n")
+    except Exception as e:
+        report.append("⚠️ No se pudieron obtener todos los registros DNS.\n")
+
+    try:
+        report.append("--- ℹ️ WHOIS ---")
+        w = whois.whois(domain)
+        report.append(f"Registrador: `{w.registrar}`")
+        creation_date = w.creation_date[0] if isinstance(w.creation_date, list) else w.creation_date
+        expiration_date = w.expiration_date[0] if isinstance(w.expiration_date, list) else w.expiration_date
+        report.append(f"Creado: `{creation_date.strftime('%Y-%m-%d') if creation_date else 'N/A'}`")
+        report.append(f"Expira: `{expiration_date.strftime('%Y-%m-%d') if expiration_date else 'N/A'}`\n")
+    except Exception as e:
+        report.append("⚠️ No se pudo obtener la información de WHOIS.\n")
+        
+    common_ports = {21:"FTP", 22:"SSH", 80:"HTTP", 443:"HTTPS", 3306:"MySQL", 3389:"RDP", 8080:"HTTP-Proxy"}
+    open_ports = []
+    for port, service in common_ports.items():
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.5)
+        if sock.connect_ex((ip_address, port)) == 0:
+            open_ports.append(f"✅ `{port}/{service}`")
+        sock.close()
+    
+    report.append("--- 📡 Puertos Comunes ---")
+    if open_ports:
+        report.append("\n".join(open_ports))
+    else:
+        report.append("❌ No se encontraron puertos comunes abiertos.")
+
+    return "\n".join(report)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        analizar_dominio(sys.argv[1])
-    else:
-        print("Por favor, proporciona un dominio o IP para analizar.")
+    if len(sys.argv) != 2:
+        print("Uso: python net_analyzer.py <dominio_o_ip>", file=sys.stderr)
+        sys.exit(1)
+    
+    target = sys.argv[1].lower()
+    
+    try:
+        ip_address = socket.gethostbyname(target)
+        
+        # --- ¡LÓGICA PRINCIPAL MEJORADA! ---
+        # Decidimos qué función usar basándonos en la terminación del dominio.
+        if target.endswith('.cl'):
+            full_report = analyze_nic_cl(target, ip_address)
+        else:
+            full_report = analyze_international_domain(target, ip_address)
+            
+        print(full_report)
+        
+    except socket.gaierror:
+        print(f"❌ No se pudo resolver el dominio '{target}'. ¿Está escrito correctamente?", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Ocurrió un error inesperado durante el análisis: {e}", file=sys.stderr)
+        sys.exit(1)
