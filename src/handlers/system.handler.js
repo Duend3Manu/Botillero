@@ -20,7 +20,27 @@ async function checkPing() {
 }
 
 // --- Función principal del manejador (unificada) ---
-async function handlePing(message, client) {
+async function handlePing(clientOrMessage, maybeMessage) {
+    // Soporte para dos firmas:
+    //  - handlePing(client, message)
+    //  - handlePing(message)
+    let client = null;
+    let message = null;
+
+    if (maybeMessage) {
+        client = clientOrMessage;
+        message = maybeMessage;
+    } else {
+        message = clientOrMessage;
+        // Intentar obtener client desde diferentes ubicaciones posibles
+        client = (message && (message.client || (message.raw && message.raw.client) || (message.raw && message.raw._client))) || global.botClient || null;
+    }
+
+    if (!client) {
+        console.warn('[system.handler] handlePing: client no disponible, devolviendo estado mínimo.');
+        return 'Pong ✅ (client no disponible para detalles).';
+    }
+
     try {
         // --- Métricas del Bot (las que añadimos) ---
         const botLatency = (Date.now() / 1000) - message.timestamp;
@@ -73,4 +93,9 @@ async function handlePing(message, client) {
     }
 }
 
-module.exports = { handlePing };
+// Exportar si corresponde (no sobrescribir otros exports)
+if (typeof module.exports === 'object' && module.exports !== null) {
+    module.exports = Object.assign(module.exports, { handlePing });
+} else {
+    module.exports = { handlePing };
+}

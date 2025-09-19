@@ -6,6 +6,43 @@ const puppeteer = require('puppeteer');
 const config = require('../config');
 const { generateWhatsAppMessage } = require('../utils/secService');
 
+// Añadir import al servicio de utilidades (si existe)
+let utilityService = null;
+try {
+    utilityService = require('../services/utility.service');
+} catch (e) {
+    // Si no existe, se usará un fallback dentro de handleFeriados
+}
+
+/**
+ * handleFeriados: handler para el comando !feriados
+ * - Intenta obtener la lista desde services/utility.service.getFeriados()
+ * - Si no existe el servicio, devuelve un mensaje fallback con la fecha actual
+ */
+async function handleFeriados(message) {
+    try {
+        if (utilityService && typeof utilityService.getFeriados === 'function') {
+            const result = await utilityService.getFeriados();
+            // retornamos string si el servicio lo entrega, si no, stringify
+            return (typeof result === 'string') ? result : JSON.stringify(result, null, 2);
+        }
+
+        // Fallback: respuesta simple informativa
+        const today = moment().tz(config.timezone || 'UTC').format('YYYY-MM-DD');
+        return `No tengo acceso al servicio de feriados. Fecha actual: ${today}\n\nPide al administrador instalar/activar src/services/utility.service.js`;
+    } catch (err) {
+        console.error('[utility.handler] handleFeriados error:', err);
+        return 'Ocurrió un error al obtener los feriados. Intenta de nuevo más tarde.';
+    }
+}
+
+// Export defensivo: añadir handleFeriados a los exports existentes
+if (typeof module.exports === 'object' && module.exports !== null) {
+    module.exports = Object.assign(module.exports, { handleFeriados });
+} else {
+    module.exports = { handleFeriados };
+}
+
 // --- ESTRUCTURA DE COMANDOS PARA EL MENÚ DINÁMICO Y VISUAL ---
 // Ahora el menú tiene emojis para ser más atractivo.
 const menuConfig = {
@@ -77,10 +114,11 @@ function handleMenu() {
 // --- FUNCIONES DE LOS COMANDOS (LÓGICA ORIGINAL RESTAURADA) ---
 
 async function handleFarmacias(message) {
-    const city = message.body.toLowerCase().replace(/!far|\/far/g, '').trim();
-    if (!city) {
+    const comuna = message.args[0];
+    if (!comuna) {
         return 'Pone la comuna po, wn. Por ejemplo: `!far santiago`';
     }
+    const city = comuna.toLowerCase(); // Usamos la variable 'comuna'
 
     try {
         const response = await axios.get('https://midas.minsal.cl/farmacia_v2/WS/getLocalesTurnos.php');
@@ -105,7 +143,7 @@ async function handleFarmacias(message) {
 }
 
 async function handleClima(message) {
-    const city = message.body.substring(message.body.indexOf(' ') + 1).trim();
+    const city = message.args.join(' ');
     if (!city) {
         return "Ya po, dime la ciudad. Ej: `!clima arica`";
     }
@@ -165,9 +203,12 @@ async function handleSismos() {
 }
 
 async function handleBus(message, client) {
-    const paradero = message.body.substring(message.body.indexOf(' ') + 1).trim().toUpperCase();
+    // Aceptar tanto mensaje adaptado (message.args) como raw whatsapp (message.body/message.text)
+    const rawText = (message.args ? [message.command, ...message.args].join(' ') : (message.body || message.text || '')).toString();
+    const args = message.args || (rawText.trim().split(/\s+/).slice(1));
+    const paradero = args[0] ? args[0].toUpperCase() : null;
     if (!paradero) {
-        return client.sendMessage(message.from, "Tírame el código del paradero po. Ej: `!bus PA433`");
+        return message.sendMessage("Tírame el código del paradero po. Ej: `!bus PA433`");
     }
 
     await message.react('⏳');
@@ -195,7 +236,7 @@ async function handleBus(message, client) {
 
         if (services.length === 0) {
             await browser.close();
-            return client.sendMessage(message.from, `No viene ninguna micro pa'l paradero *${paradero}*.`);
+            return message.sendMessage(`No viene ninguna micro pa'l paradero *${paradero}*.`);
         }
 
         services.forEach(s => {
@@ -206,18 +247,18 @@ async function handleBus(message, client) {
         
         await browser.close();
         await message.react('✅');
-        return client.sendMessage(message.from, reply.trim());
+        return message.sendMessage(reply.trim());
 
     } catch (error) {
         console.error("Error con Puppeteer en !bus:", error);
         if (browser) await browser.close();
         await message.react('❌');
-        return client.sendMessage(message.from, `No pude cachar la info del paradero *${paradero}*. A lo mejor pusiste mal el código.`);
+        return message.sendMessage(`No pude cachar la info del paradero *${paradero}*. A lo mejor pusiste mal el código.`);
     }
 }
 
 async function handleSec(message) {
-    const command = message.body.toLowerCase().split(' ')[0];
+    const command = message.text.toLowerCase().split(' ')[0];
     let region = null;
     if (command === '!secrm' || command === '/secrm') {
         region = 'Metropolitana';

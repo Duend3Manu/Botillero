@@ -73,78 +73,18 @@ async function getLatestIncidentFromTelegramChannel() {
     }
 }
 
-
-/**
- * PRIORIDAD 3 (PLAN C): Obtiene el último tweet de la cuenta oficial de Metro.
- * @returns {Promise<{text: string, time: string}|null>}
- */
-async function getLatestIncidentFromTwitter() {
-    const nitterInstances = [
-        'https://nitter.net',
-        'https://nitter.cz',
-        'https://nitter.poast.org',
-        'https://nitter.privacydev.net'
-    ];
-
-    for (const instance of nitterInstances) {
-        try {
-            const twitterUrl = `${instance}/metrodesantiago`;
-            console.log(`(Servicio Metro) -> Intentando con el mirror de Twitter: ${twitterUrl}`);
-            const { data } = await axios.get(twitterUrl, { 
-                timeout: 4000,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                }
-            });
-            const $ = cheerio.load(data);
-            
-            const firstTweet = $('.timeline-item').first();
-            if (firstTweet.length === 0) continue;
-
-            let tweetText = firstTweet.find('.tweet-content').text().trim();
-            const tweetDateStr = firstTweet.find('.tweet-date a').attr('title');
-
-            if (!tweetText || !tweetDateStr) continue;
-            
-            tweetText = tweetText.replace(/^Metro de Santiago/i, '').trim();
-            
-            const tweetDate = moment.utc(tweetDateStr, "MMM D, YYYY · h:mm A Z");
-            const now = moment.utc();
-
-            if (now.diff(tweetDate, 'hours') < 2) {
-                const tweetTimeLocal = tweetDate.tz('America/Santiago').format('HH:mm');
-                return {
-                    source: 'Twitter Oficial',
-                    text: tweetText,
-                    time: tweetTimeLocal
-                };
-            }
-        } catch (error) {
-            console.error(`(Servicio Metro) -> Falló el mirror ${instance}: ${error.message}`);
-        }
-    }
-
-    console.error("Error al obtener datos de Twitter: Todos los mirrors fallaron.");
-    return null;
-}
-
 /**
  * Obtiene el estado completo de la red de Metro, probando múltiples fuentes de alertas.
  * @returns {Promise<{type: 'text'|'video', content?: string, path?: string, caption?: string}>}
  */
 async function getMetroStatus() {
     try {
-        let statusMessage = await pythonService.executeScript('metro.py');
+        let statusMessage = await pythonService.executePythonScript('metro.py');
         let latestIncident = await getLatestIncidentFromApi();
 
         if (!latestIncident || latestIncident.error) {
             console.log("(Servicio Metro) -> API de WhatsApp falló, intentando con Canal de Telegram...");
             latestIncident = await getLatestIncidentFromTelegramChannel();
-        }
-
-        if (!latestIncident) {
-            console.log("(Servicio Metro) -> Canal de Telegram falló, intentando con Twitter como respaldo final...");
-            latestIncident = await getLatestIncidentFromTwitter();
         }
 
         const isOk = statusMessage.includes("Toda la red se encuentra disponible");
@@ -180,4 +120,3 @@ async function getMetroStatus() {
 }
 
 module.exports = { getMetroStatus };
-

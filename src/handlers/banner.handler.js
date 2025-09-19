@@ -13,7 +13,7 @@ async function handleBanner(message) {
     
     const availableStyles = [
         'vengadores', 'shrek', 'mario', 'nintendo', 'sega', 
-        'potter', 'starwars', 'disney', 'stranger'
+        'potter', 'starwars', 'disney', 'stranger', 'cocacola', 'pixel'
     ];
 
     if (args.length < 2) {
@@ -58,4 +58,3 @@ async function handleBanner(message) {
 module.exports = {
     handleBanner
 };
-

@@ -4,7 +4,7 @@ require('dotenv').config();
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const commandHandler = require('./src/handlers/command.handler');
-const { adaptWhatsappMessage } = require('./src/platforms/whatsapp.adapter'); // <-- ¡Importamos el adaptador!
+const { adaptWhatsappMessage } = require('./src/platforms/whatsapp.adapter');
 const express = require('express');
 
 console.log("Iniciando Botillero v2.0 (Arquitectura Híbrida)...");
@@ -23,14 +23,15 @@ client.on('ready', () => {
 });
 
 // --- MANEJADOR DE MENSAJES CON ADAPTADOR ---
-client.on('message', async (message) => {
+client.on('message', async (message) => { // <-- Fíjate que la variable se llama 'message'
     try {
         // 1. Adaptamos el mensaje de WhatsApp a nuestro formato universal
         const adaptedMessage = await adaptWhatsappMessage(client, message);
         
-        // 2. Pasamos el mensaje adaptado al commandHandler
+        // 2. Pasamos el mensaje adaptado Y el original al commandHandler
         if (adaptedMessage) {
-            await commandHandler(adaptedMessage);
+            // El cambio es aquí: usamos 'message' en lugar de 'msg'
+            await commandHandler(client, adaptedMessage);
         }
     } catch (error) {
         console.error("Error al procesar el mensaje de WhatsApp:", error);
@@ -41,7 +42,6 @@ client.on('message', async (message) => {
 const app = express();
 app.use(express.json());
 const NOTIFICATION_PORT = process.env.PORT || 3001;
-// Asegúrate de tener GROUP_ID en tu .env o defínelo aquí
 const GROUP_ID = process.env.GROUP_ID || 'TU_GROUP_ID@g.us'; 
 
 app.post('/send-notification', (req, res) => {

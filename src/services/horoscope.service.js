@@ -45,7 +45,7 @@ async function getHoroscope(signo) {
 
     try {
         console.log(`(Servicio Horóscopo) -> Ejecutando ${scriptName} para el signo ${signoLimpio}...`);
-        const horoscopeData = await pythonService.executeScript(scriptName, [signoLimpio]);
+        const horoscopeData = await pythonService.executePythonScript(scriptName, [signoLimpio]);
         const imagePath = findImagePath(signoLimpio);
         
         return { text: horoscopeData, imagePath: imagePath };

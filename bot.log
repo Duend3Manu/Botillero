@@ -1,0 +1,20 @@
+
+> botillero@2.3.0 start
+> node index.js
+
+[dotenv@17.2.2] injecting env (4) from .env -- tip: ­ƒôí version env with Radar: https://dotenvx.com/radar
+[dotenv@17.2.2] injecting env (0) from .env -- tip: ÔÜÖ´©Å  enable debug logging with { debug: true }
+--- DEPRECATION: src/platforms/whatsapp.adapter.js est├í deprecado. Usa src/platforms/adapter.js ---
+Iniciando Botillero v2.0 (Arquitectura H├¡brida)...
+(API) -> Servidor de notificaciones escuchando en el puerto 3000
+┬íCliente de WhatsApp conectado y listo para la acci├│n!
+(Handler) -> Comando recibido en whatsapp: "menu"
+(Handler) -> Comando recibido en whatsapp: "prox"
+(Servicio) -> Ejecutando proxpar.py...
+(Handler) -> Comando recibido en whatsapp: "tabla"
+(Servicio) -> Ejecutando tabla.py...
+(Handler) -> Comando recibido en whatsapp: "feriados"
+[command.handler] Error procesando 'feriados': TypeError: handleFeriados is not a function
+    at commandHandler (C:\bots\botillero\src\handlers\command.handler.js:141:57)
+    at Client.<anonymous> (C:\bots\botillero\index.js:34:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)

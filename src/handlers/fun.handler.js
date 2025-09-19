@@ -2,14 +2,16 @@
 
 const fs = require('fs');
 const path = require('path');
-const moment = require('moment-timezone');
 const { MessageMedia } = require('whatsapp-web.js');
 
 // --- Lógica para Stickers ---
 async function handleSticker(client, message) {
-    let mediaMessage = message;
-    if (message.hasQuotedMsg) {
-        const quotedMsg = await message.getQuotedMessage();
+    // The message object from the adapter might have the raw message inside .raw
+    const rawMessage = message.raw || message;
+    let mediaMessage = rawMessage; // Start with the raw message
+
+    if (rawMessage.hasQuotedMsg) {
+        const quotedMsg = await rawMessage.getQuotedMessage();
         if (quotedMsg.hasMedia) {
             mediaMessage = quotedMsg;
         }
@@ -18,8 +20,10 @@ async function handleSticker(client, message) {
     if (mediaMessage.hasMedia && (mediaMessage.type === 'image' || mediaMessage.type === 'video' || mediaMessage.type === 'gif')) {
         try {
             const media = await mediaMessage.downloadMedia();
-            message.reply(media, undefined, { sendMediaAsSticker: true, stickerAuthor: "Botillero", stickerName: "Creado por Botillero" });
+            // Use the raw message to reply, which should be the original wwebjs message object
+            await rawMessage.reply(media, undefined, { sendMediaAsSticker: true, stickerAuthor: "Botillero", stickerName: "Creado por Botillero" });
         } catch (e) {
+            // Use the original adapted message for the error reply for consistency
             message.reply("Hubo un error al crear el sticker.");
             console.error(e);
         }
@@ -29,6 +33,9 @@ async function handleSticker(client, message) {
 }
 
 async function handleStickerToMedia(client, message) {
+    // The message object from the adapter might have the raw message inside .raw
+    const rawMessage = message.raw || message;
+
     // Implementación con carga segura de 'sharp'
     let sharp;
     try {
@@ -39,11 +46,11 @@ async function handleStickerToMedia(client, message) {
         return message.reply("❌ Error: La función para convertir imágenes no está disponible. El administrador debe instalar la librería 'sharp'.");
     }
 
-    if (!message.hasQuotedMsg) {
+    if (!rawMessage.hasQuotedMsg) {
         return message.reply("Para usar este comando, debes responder a un sticker.");
     }
 
-    const quotedMsg = await message.getQuotedMessage();
+    const quotedMsg = await rawMessage.getQuotedMessage();
 
     if (!quotedMsg.hasMedia || quotedMsg.type !== 'sticker') {
         return message.reply("Eso no parece ser un sticker.");
@@ -90,8 +97,6 @@ async function handleStickerToMedia(client, message) {
     }
 }
 
-
-// --- Lógica para Sonidos ---
 const soundMap = {
     'mataron': { file: 'mataron.mp3', reaction: '😂' }, 'muerte': { file: 'muerte.mp3', reaction: '😂' },
     'muerte2': { file: 'muerte2.mp3', reaction: '😂' }, 'muerte3': { file: 'muerte3.mp3', reaction: '😂' },
@@ -137,79 +142,7 @@ const soundMap = {
     'venganza': { file: 'Venganza.mp3', reaction: '😂' }, 'weko': { file: 'weko.mp3', reaction: '🏳️‍🌈' },
     'himnoe': { file: 'urssespañol.mp3', reaction: '🇷🇺' }
 };
-
 const soundList = Object.keys(soundMap);
-
-function handleAudioList() {
-    const header = "🎵 **Comandos de Audio Disponibles** 🎵\n\n";
-    const commandList = soundList.map(cmd => `!${cmd}`).join('\n');
-    return header + commandList;
-}
-
-// --- FUNCIÓN DE SONIDO MODIFICADA ---
-async function handleSound(client, commandMessage, reactionTarget, command) {
-    const soundInfo = soundMap[command];
-    if (!soundInfo) return;
-
-    const audioPath = path.join(__dirname, '..', '..', 'mp3', soundInfo.file);
-
-    if (fs.existsSync(audioPath)) {
-        // Reacciona al mensaje objetivo (que puede ser el original o el citado)
-        await reactionTarget.react(soundInfo.reaction);
-        const media = MessageMedia.fromFilePath(audioPath);
-        // Responde al mensaje que contenía el comando
-        commandMessage.reply(media, undefined, { sendAudioAsVoice: true });
-    } else {
-        commandMessage.reply(`No se encontró el archivo de audio para "!${command}".`);
-        console.error(`Archivo no encontrado: ${audioPath}`);
-    }
-}
-
-function getSoundCommands() {
-    return soundList;
-}
-
-async function handleJoke(client, message) {
-    const folderPath = path.join(__dirname, '..', '..', 'chistes');
-    if (!fs.existsSync(folderPath)) return message.reply("La carpeta de chistes no está configurada.");
-
-    const files = fs.readdirSync(folderPath);
-    if (files.length === 0) return message.reply("No hay chistes para contar.");
-    
-    const randomIndex = Math.floor(Math.random() * files.length);
-    const audioPath = path.join(folderPath, files[randomIndex]);
-    
-    const media = MessageMedia.fromFilePath(audioPath);
-    message.reply(media, undefined, { sendAudioAsVoice: true });
-}
-
-function getCountdownMessage(targetDate, eventName, emoji) {
-    const now = moment().tz('America/Santiago');
-    const diff = moment.duration(targetDate.diff(now));
-
-    if (diff.asMilliseconds() <= 0) return `¡Feliz ${eventName}! ${emoji}`;
-
-    const days = Math.floor(diff.asDays());
-    const hours = diff.hours();
-    const minutes = diff.minutes();
-
-    return `Para ${eventName} quedan: ${days} días, ${hours} horas y ${minutes} minutos ${emoji}`;
-}
-
-function handleCountdown(command) {
-    const year = moment().year();
-    switch (command) {
-        case '18':
-            return getCountdownMessage(moment.tz(`${year}-09-18 00:00:00`, 'America/Santiago'), 'el 18', '🇨🇱');
-        case 'navidad':
-            return getCountdownMessage(moment.tz(`${year}-12-25 00:00:00`, 'America/Santiago'), 'Navidad', '🎅');
-        case 'añonuevo':
-            return getCountdownMessage(moment.tz(`${year + 1}-01-01 00:00:00`, 'America/Santiago'), 'Año Nuevo', '🎆');
-        default:
-            return null;
-    }
-}
-
 const frases = {
     0: 'Déjame piola',
     1: '¿Qué weá querí?',
@@ -254,13 +187,66 @@ const frases = {
     40: '¿Bot? Ojalá tu internet ande más lento que VTR en día de lluvia.',
     41: 'Ando con menos paciencia que el Chino Ríos en una conferencia.',
     42: '¿Y vo creí que soy la Teletón? ¿Que te ayudo 24/7? No po, wn.',
-    43: 'Estoy procesando... lo poco y na\' que me importa. Lol.',
+    43: 'Estoy procesando... lo poco y na\´ que me importa. Lol.',
     44: 'Wena, te ganaste el Copihue de Oro al comentario más inútil. ¡Un aplauso! 👏',
     45: 'Le poní más color que la Doctora Polo, wn.',
     46: 'Jajaja, qué chistoso. Me río en binario: 01101000 01100001 01101000 01100001.'
 };
 let usedPhrases = [];
 
+function handleAudioList() {
+    const header = "🎵 **Comandos de Audio Disponibles** 🎵\n\n";
+    const commandList = soundList.map(cmd => `!${cmd}`).join('\n');
+    return header + commandList;
+}
+function handleSound(client, commandMessage, reactionTarget, command) {
+    const soundInfo = soundMap[command];
+    if (!soundInfo) return;
+    const audioPath = path.join(__dirname, '..', '..', 'mp3', soundInfo.file);
+    if (fs.existsSync(audioPath)) {
+        reactionTarget.react(soundInfo.reaction);
+        const media = MessageMedia.fromFilePath(audioPath);
+        commandMessage.reply(media, undefined, { sendAudioAsVoice: true });
+    } else {
+        commandMessage.reply(`No se encontró el archivo de audio para "!${command}".`);
+        console.error(`Archivo no encontrado: ${audioPath}`);
+    }
+}
+function getSoundCommands() {
+    return soundList;
+}
+async function handleJoke(client, message) {
+    const folderPath = path.join(__dirname, '..', '..', 'chistes');
+    if (!fs.existsSync(folderPath)) return message.reply("La carpeta de chistes no está configurada.");
+    const files = fs.readdirSync(folderPath);
+    if (files.length === 0) return message.reply("No hay chistes para contar.");
+    const randomIndex = Math.floor(Math.random() * files.length);
+    const audioPath = path.join(folderPath, files[randomIndex]);
+    const media = MessageMedia.fromFilePath(audioPath);
+    message.reply(media, undefined, { sendAudioAsVoice: true });
+}
+function getCountdownMessage(targetDate, eventName, emoji) {
+    const now = moment().tz('America/Santiago');
+    const diff = moment.duration(targetDate.diff(now));
+    if (diff.asMilliseconds() <= 0) return `¡Feliz ${eventName}! ${emoji}`;
+    const days = Math.floor(diff.asDays());
+    const hours = diff.hours();
+    const minutes = diff.minutes();
+    return `Para ${eventName} quedan: ${days} días, ${hours} horas y ${minutes} minutos ${emoji}`;
+}
+function handleCountdown(command) {
+    const year = moment().year();
+    switch (command) {
+        case '18':
+            return getCountdownMessage(moment.tz(`${year}-09-18 00:00:00`, 'America/Santiago'), 'el 18', '🇨🇱');
+        case 'navidad':
+            return getCountdownMessage(moment.tz(`${year}-12-25 00:00:00`, 'America/Santiago'), 'Navidad', '🎅');
+        case 'añonuevo':
+            return getCountdownMessage(moment.tz(`${year + 1}-01-01 00:00:00`, 'America/Santiago'), 'Año Nuevo', '🎆');
+        default:
+            return null;
+    }
+}
 function obtenerFraseAleatoria() {
     const fraseKeys = Object.keys(frases);
     let randomIndex = Math.floor(Math.random() * fraseKeys.length);
@@ -275,14 +261,24 @@ function obtenerFraseAleatoria() {
     return frases[fraseKeys[randomIndex]];
 }
 
+
+// --- Funciones de Mención (Corregidas para el adaptador) ---
+// En: src/handlers/fun.handler.js
+
 async function handleBotMention(client, message) {
+    if (!message) { return; }
     try {
-        const contact = await message.getContact();
+        // Necesitamos el 'contact' para obtener el nombre, pero usaremos el 'senderId' para la mención.
+        const contact = await client.getContactById(message.senderId);
         const texto = obtenerFraseAleatoria();
         
         await message.react('🤡');
-        await message.reply(`${texto}, @${contact.id.user}`, undefined, {
-            mentions: [contact.id._serialized]
+
+        const textoFinal = `${texto}, @${contact.pushname}`;
+        // --- SOLUCIÓN DEFINITIVA PARA MENCIONES ---
+        // Usamos client.sendMessage y pasamos el ID del sender directamente.
+        await client.sendMessage(message.chatId, textoFinal, {
+            mentions: [message.senderId]
         });
     } catch (e) {
         console.error("Error en handleBotMention:", e);
@@ -290,141 +286,23 @@ async function handleBotMention(client, message) {
 }
 
 async function handleOnce(client, message) {
+    if (!message) { return; }
     try {
-        const contact = await message.getContact();
+        const contact = await client.getContactById(message.senderId);
         await message.react('😂');
-        await message.reply('Chúpalo entonces @' + contact.id.user, undefined, { 
-            mentions: [contact.id._serialized] 
+
+        const textoFinal = `Chúpalo entonces, @${contact.pushname}`;
+        // --- SOLUCIÓN DEFINITIVA PARA MENCIONES ---
+        await client.sendMessage(message.chatId, textoFinal, { 
+            mentions: [message.senderId]
         });
     } catch (e) {
         console.error("Error en handleOnce:", e);
     }
 }
 
-// --- LÓGICA PARA LA RULETA Y PUNTOS (CON ANTI-SPAM) ---
 
-const DB_PATH = path.join(__dirname, '..', '..', 'database', 'puntos.json');
-const COOLDOWN_SECONDS = 300; // 5 minutos de espera entre tiradas
-
-function leerPuntos() {
-    if (!fs.existsSync(DB_PATH)) {
-        fs.writeFileSync(DB_PATH, JSON.stringify({}));
-        return {};
-    }
-    const data = fs.readFileSync(DB_PATH, 'utf-8');
-    return JSON.parse(data);
-}
-
-function guardarPuntos(data) {
-    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-}
-
-async function handleRuleta(client, message) {
-    const userId = message.author || message.from;
-    const puntosData = leerPuntos();
-    const contact = await message.getContact();
-    const nombreUsuario = contact.pushname || contact.name || `Usuario-${userId.slice(0, 4)}`;
-
-    if (!puntosData[userId]) {
-        puntosData[userId] = {
-            puntos: 0,
-            ultimoJuego: null,
-            nombre: nombreUsuario,
-            notificadoCooldown: false
-        };
-    } else {
-        if (puntosData[userId].notificadoCooldown === undefined) {
-            puntosData[userId].notificadoCooldown = false;
-        }
-        puntosData[userId].nombre = nombreUsuario;
-    }
-
-    const ahora = moment();
-    const ultimoJuego = puntosData[userId].ultimoJuego ? moment(puntosData[userId].ultimoJuego) : null;
-
-    if (ultimoJuego && ahora.diff(ultimoJuego, 'seconds') < COOLDOWN_SECONDS) {
-        if (puntosData[userId].notificadoCooldown) {
-            return;
-        }
-        
-        const tiempoRestante = COOLDOWN_SECONDS - ahora.diff(ultimoJuego, 'seconds');
-        message.reply(`⏳ ¡Tranquilo, vaquero! Debes esperar ${tiempoRestante} segundos más para volver a girar la ruleta.`);
-        
-        puntosData[userId].notificadoCooldown = true;
-        guardarPuntos(puntosData);
-        
-        return;
-    }
-
-    const ruletaGifPath = path.join(__dirname, '..', '..', 'assets', 'ruleta.gif');
-    if (fs.existsSync(ruletaGifPath)) {
-        const media = MessageMedia.fromFilePath(ruletaGifPath);
-        await client.sendMessage(message.from, media, { caption: 'Girando la ruleta... 🎰', sendVideoAsGif: true });
-    } else {
-        await message.reply('Girando la ruleta... 🎰');
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 4000));
-
-    const premios = [
-        { nombre: '¡Nada! Suerte para la próxima', puntos: 0, chance: 30 },
-        { nombre: '10 puntitos', puntos: 10, chance: 40 },
-        { nombre: '50 puntos', puntos: 50, chance: 15 },
-        { nombre: '¡100 puntos! Nada mal', puntos: 100, chance: 10 },
-        { nombre: '¡¡500 PUNTOS!! ¡El Jackpot!', puntos: 500, chance: 5 }
-    ];
-
-    const random = Math.random() * 100;
-    let acumulado = 0;
-    let premioGanado = premios[0];
-
-    for (const premio of premios) {
-        acumulado += premio.chance;
-        if (random < acumulado) {
-            premioGanado = premio;
-            break;
-        }
-    }
-
-    puntosData[userId].puntos += premioGanado.puntos;
-    puntosData[userId].ultimoJuego = ahora.toISOString();
-    puntosData[userId].notificadoCooldown = false;
-    guardarPuntos(puntosData);
-    
-    let mensajeResultado = `*${nombreUsuario}*, la ruleta se detuvo y ganaste:\n\n🎉 *${premioGanado.nombre}* 🎉`;
-    mensajeResultado += `\n\nAhora tienes un total de *${puntosData[userId].puntos}* puntos.`;
-
-    if (premioGanado.puntos > 0) {
-        const rankingArray = Object.values(puntosData);
-        rankingArray.sort((a, b) => b.puntos - a.puntos);
-        const top3 = rankingArray.slice(0, 3);
-
-        let rankingTexto = "\n\n*👑 Ranking Top 3 👑*";
-        const medallas = ['🥇', '🥈', '🥉'];
-        top3.forEach((jugador, index) => {
-            rankingTexto += `\n${medallas[index]} ${jugador.nombre}: *${jugador.puntos}* pts`;
-        });
-        mensajeResultado += rankingTexto;
-    }
-
-    await message.reply(mensajeResultado);
-}
-
-async function handlePuntos(client, message) {
-    const userId = message.author || message.from;
-    const puntosData = leerPuntos();
-
-    if (!puntosData[userId] || puntosData[userId].puntos === 0) {
-        return message.reply("Aún no tienes puntos. ¡Usa `!ruleta` para empezar a ganar!");
-    }
-
-    const contact = await message.getContact();
-    const nombreUsuario = contact.pushname || contact.name || 'Tú';
-
-    await message.reply(`*${nombreUsuario}*, actualmente tienes:\n\n🏆 *${puntosData[userId].puntos}* puntos 🏆`);
-}
-
-
+// --- Exportación de todas las funciones del módulo ---
 module.exports = {
     handleSticker,
     handleStickerToMedia,
@@ -435,6 +313,4 @@ module.exports = {
     handleCountdown,
     handleBotMention,
     handleOnce,
-    handleRuleta,
-    handlePuntos
 };
