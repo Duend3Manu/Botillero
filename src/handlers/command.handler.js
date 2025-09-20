@@ -8,6 +8,7 @@ const nationalTeamService = require('../services/nationalTeam.service');
 const horoscopeService = require('../services/horoscope.service');
 const externalService = require('../services/external.service');
 const utilityService = require('../services/utility.service.js');
+const pythonService = require('../services/python.service');
 
 const { handlePing } = require('./system.handler.js');
 const { handleMenu, handleClima, handleSismos, handleFeriados, handleFarmacias, handleSec, handleBus } = require('./utility.handler.js');
@@ -128,7 +129,40 @@ async function commandHandler(client, message) {
                 return message.reply(await externalService.getBolsaData());
                 
             // Comandos de Búsqueda Personal
-            case 'tel': case 'num': return handlePhoneSearch(message);
+            case 'tel': 
+            case 'phone': {
+                await message.showLoading();
+                const number = message.args[0];
+
+                if (!number) {
+                    return message.reply('Debes proporcionar un número de teléfono para buscar. Ejemplo: `!tel +56912345678`');
+                }
+
+                try {
+                    // Llama al servicio que ejecuta scripts de Python
+                    const result = await pythonService.executeScript('phone_info.py', number);
+                    
+                    if (result.error) {
+                        return message.reply(`Error al buscar la información: ${result.error}`);
+                    }
+
+                    // Formatea la respuesta
+                    const replyText = [
+                        `*ℹ️ Información del Número*`,
+                        `*Número:* ${result.number}`,
+                        `*País:* ${result.country}`,
+                        `*Compañía (Carrier):* ${result.carrier}`,
+                        `*Zona Horaria:* ${result.time_zones.join(', ')}`
+                    ].join('\n');
+
+                    await message.reply(replyText);
+
+                } catch (error) {
+                    console.error('Error en el comando !tel:', error);
+                    await message.reply('Ocurrió un error al ejecutar el script de información del teléfono.');
+                }
+                break;
+            }
             case 'pat': case 'patente': return handlePatenteSearch(message);
             case 'tne': return handleTneSearch(message);
 
