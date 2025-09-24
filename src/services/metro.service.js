@@ -81,9 +81,10 @@ async function getMetroStatus() {
     let statusMessage;
     try {
         console.log("(Servicio Metro) -> Iniciando obtención de estado desde script de Python...");
-        const statusResult = await pythonService.executeScript('metro.py');
-        statusMessage = statusResult.status;
+        statusMessage = await pythonService.executeScript('metro.py');
         console.log("(Servicio Metro) -> Script de Python ejecutado con éxito.");
+        console.log("(Servicio Metro) -> Salida del script:", statusMessage);
+        console.log("(Servicio Metro) -> Tipo de salida:", typeof statusMessage);
     } catch (pythonError) {
         console.error("(Servicio Metro) -> ERROR FATAL: El script de Python 'metro.py' falló.", pythonError);
         return { 
