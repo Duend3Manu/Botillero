@@ -1,0 +1,13 @@
+requests
+beautifulsoup4
+unidecode
+phonenumbers
+Pillow
+playwright
+python-whois
+dnspython
+ipapi
+python-dateutil
+pandas
+tabulate
+aiohttp
