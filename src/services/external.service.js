@@ -16,7 +16,7 @@ async function getBencinaData(comuna) {
     try {
         console.log(`(Servicio Externo) -> Ejecutando ${scriptName} para ${comuna || 'todas las comunas'}...`);
         // Corregido: usar el nombre de función correcto del servicio de python.
-        const result = await pythonService.executePythonScript(scriptName, [comuna || '']);
+        const result = await pythonService.executeScript(scriptName, [comuna || '']);
         return result;
     } catch (err) {
         console.error(`[external.service] Error en getBencinaData:`, err.message || err);
@@ -33,7 +33,7 @@ async function getBolsaData() {
     try {
         console.log(`(Servicio Externo) -> Ejecutando ${scriptName}...`);
         // Corregido: usar el nombre de función correcto del servicio de python.
-        const result = await pythonService.executePythonScript(scriptName);
+        const result = await pythonService.executeScript(scriptName);
         return result;
     } catch (err) {
         console.error(`[external.service] Error en getBolsaData:`, err.message || err);

@@ -20,8 +20,8 @@ async function executeScript(scriptName, ...args) {
                 const result = JSON.parse(stdout);
                 resolve(result);
             } catch (parseError) {
-                console.error(`Error al parsear JSON de stdout: ${parseError}`);
-                reject({ error: `Error al procesar la respuesta del script Python: ${stdout}` });
+                // It's not a JSON, so resolve with the raw string
+                resolve(stdout);
             }
         });
     });
