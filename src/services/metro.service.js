@@ -78,27 +78,50 @@ async function getLatestIncidentFromTelegramChannel() {
  * @returns {Promise<{type: 'text'|'video', content?: string, path?: string, caption?: string}>}
  */
 async function getMetroStatus() {
+    let statusMessage;
     try {
-        let statusMessage = await pythonService.executePythonScript('metro.py');
-        let latestIncident = await getLatestIncidentFromApi();
+        console.log("(Servicio Metro) -> Iniciando obtención de estado desde script de Python...");
+        statusMessage = await pythonService.executePythonScript('metro.py');
+        console.log("(Servicio Metro) -> Script de Python ejecutado con éxito.");
+    } catch (pythonError) {
+        console.error("(Servicio Metro) -> ERROR FATAL: El script de Python 'metro.py' falló.", pythonError);
+        return { 
+            type: 'text', 
+            content: "❌ No se pudo obtener el estado del Metro. El script principal de consulta falló." 
+        };
+    }
 
-        if (!latestIncident || latestIncident.error) {
-            console.log("(Servicio Metro) -> API de WhatsApp falló, intentando con Canal de Telegram...");
+    let latestIncident;
+    try {
+        console.log("(Servicio Metro) -> Consultando API de alertas de WhatsApp...");
+        latestIncident = await getLatestIncidentFromApi();
+        if (latestIncident && !latestIncident.error) {
+            console.log("(Servicio Metro) -> API de WhatsApp respondió con una alerta reciente.");
+        } else {
+            console.log("(Servicio Metro) -> API de WhatsApp no disponible o sin alertas recientes. Intentando con Telegram...");
             latestIncident = await getLatestIncidentFromTelegramChannel();
+            if (latestIncident) {
+                console.log("(Servicio Metro) -> Canal de Telegram respondió con una alerta reciente.");
+            } else {
+                console.log("(Servicio Metro) -> Canal de Telegram tampoco tiene alertas recientes.");
+            }
         }
+    } catch (incidentError) {
+        console.error("(Servicio Metro) -> ERROR: No se pudieron obtener las alertas de incidentes.", incidentError);
+        // No retornamos aquí, podemos continuar con el statusMessage si lo tenemos.
+    }
 
+    try {
         const isOk = statusMessage.includes("Toda la red se encuentra disponible");
         const videoPath = path.join(__dirname, '..', '..', 'mp3', 'metro.mp4');
 
         if (isOk && !latestIncident && fs.existsSync(videoPath)) {
-            // Si todo está OK, no hay alertas y el video existe, enviamos el video.
             return {
                 type: 'video',
                 path: videoPath,
                 caption: `✅ *¡Buenas noticias!* ✅\n\n${statusMessage}`
             };
         } else {
-            // Si hay un problema o una alerta, construimos el mensaje de texto.
             if (latestIncident) {
                 statusMessage += `\n\n--------------------\n`;
                 statusMessage += `🚨 *ÚLTIMA ALERTA (${latestIncident.source} - ${latestIncident.time} hrs):*\n\n`;
@@ -109,12 +132,11 @@ async function getMetroStatus() {
                 content: statusMessage
             };
         }
-
-    } catch (error) {
-        console.error("Error al obtener el estado del Metro:", error);
+    } catch (finalError) {
+        console.error("(Servicio Metro) -> Error al construir el mensaje final:", finalError);
         return { 
             type: 'text', 
-            content: "No se pudo obtener el estado del Metro en este momento." 
+            content: "No se pudo construir la respuesta del estado del Metro." 
         };
     }
 }
