@@ -96,10 +96,19 @@ async function handleSound(client, message, command) {
 
     if (fs.existsSync(audioPath)) {
         try {
-            await message.react(soundInfo.reaction);
+            // --- INICIO DE LA MODIFICACIÓN ---
+            // Intentamos reaccionar, pero si falla, no detenemos todo el proceso.
+            try {
+                await message.react(soundInfo.reaction);
+            } catch (reactError) {
+                // Si la reacción falla, mostramos una advertencia en la consola en lugar de detener el bot.
+                console.warn(`(Advertencia) -> No se pudo reaccionar al mensaje para el comando !${command}. Error: ${reactError.message}`);
+            }
+            // --- FIN DE LA MODIFICACIÓN ---
+            
             const media = MessageMedia.fromFilePath(audioPath);
             
-            // MÉTODO DE ENVÍO SEGURO (COMO TU BOT ANTIGUO)
+            // Usamos el método de envío seguro que ya habías configurado.
             await client.sendMessage(message.from, media, { sendMediaAsDocument: false });
 
         } catch (e) {
