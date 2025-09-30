@@ -2,8 +2,9 @@
 
 const axios = require('axios');
 const cheerio = require('cheerio');
-// Se elimina la importación de 'google-it' porque ya no se usa.
+const geminiService = require('../services/gemini.service.js');
 const { getPatenteDataFormatted } = require('../utils/apiService');
+const puppeteer = require('puppeteer');
 
 async function handleWikiSearch(message) {
     const searchTerm = message.body.substring(message.body.indexOf(' ') + 1).trim();
@@ -44,62 +45,95 @@ async function handleWikiSearch(message) {
     }
 }
 
+// noticias //
+
 async function handleNews(message) {
+    await message.react('📰');
+    const url = 'http://chile.infoflow.cloud/p.php/infoflow2017/noticias-nacionales';
+    let browser = null;
+
     try {
-        const response = await axios.get('http://chile.infoflow.cloud/p.php/infoflow2017/noticias-nacionales');
-        const html = response.data;
-        const $ = cheerio.load(html);
+        console.log(`(DEBUG) -> Iniciando Puppeteer para noticias...`);
+        browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+        const page = await browser.newPage();
+        await page.goto(url, { waitUntil: 'networkidle2' });
 
-        let newsText = $('body').text().trim();
-        newsText = newsText.replace(/editor-card/g, '');
-        newsText = newsText.replace(/\n\s*\n/g, '\n\n');
+        // Esperamos a que el selector de noticias esté visible
+        await page.waitForSelector('div.noticia-23', { timeout: 10000 });
 
-        return "📰 *Noticias Nacionales - Última Hora:*\n\n" + newsText;
+        // Extraemos los datos usando page.evaluate
+        const newsItems = await page.evaluate(() => {
+            const items = [];
+            document.querySelectorAll('div.noticia-23').forEach(element => {
+                const titleElement = element.querySelector('a');
+                const title = titleElement ? titleElement.innerText.trim() : null;
+                let link = titleElement ? titleElement.getAttribute('href') : null;
+
+                if (link && !link.startsWith('http')) {
+                    link = 'http://chile.infoflow.cloud' + link;
+                }
+
+                if (title && link) {
+                    items.push(`Titular: ${title}, Enlace: ${link}`);
+                }
+            });
+            return items;
+        });
+        
+        await browser.close();
+        console.log(`(DEBUG) -> Puppeteer cerrado. ${newsItems.length} noticias encontradas.`);
+
+        if (newsItems.length === 0) {
+            return 'No pude encontrar titulares de noticias en la página (el formato puede haber cambiado).';
+        }
+
+        const newsString = newsItems.join('\n');
+        const prompt = `
+        Actúa como un periodista para un chat de WhatsApp.
+        Basado en la siguiente lista de noticias de Chile, donde cada línea tiene un titular y un enlace:
+        ---
+        ${newsString}
+        ---
+        Crea un resumen de máximo 5 puntos clave con emojis.
+        Para CADA punto clave, incluye el enlace correspondiente a la noticia que estás resumiendo.
+        Sé conciso y directo.
+        `.trim();
+        
+        const summary = await geminiService.generateText(prompt);
+        return "📰 *Resumen de Noticias Nacionales:*\n\n" + summary;
+
     } catch (error) {
-        console.error('Error al obtener las noticias:', error);
+        if (browser) await browser.close(); // Nos aseguramos de cerrar el navegador si hay un error
+        console.error('Error al obtener las noticias con Puppeteer:', error);
         return 'Lo siento, no pude obtener las noticias en este momento.';
     }
 }
 
-// --- FUNCIÓN DE BÚSQUEDA DE GOOGLE CORREGIDA ---
 async function handleGoogleSearch(message) {
+    // ... tu función de Google Search se mantiene igual ...
     const searchTerm = message.body.substring(message.body.indexOf(' ') + 1).trim();
-    if (!searchTerm) {
-        return "Escribe algo para buscar en Google. Ejemplo: `!g gatitos`";
-    }
-
-    // Leemos las claves desde el archivo .env DENTRO de la función
+    if (!searchTerm) { return "Escribe algo para buscar en Google. Ejemplo: `!g gatitos`"; }
     const API_KEY = process.env.GOOGLE_API_KEY;
     const CSE_ID = process.env.GOOGLE_CSE_ID;
-
-    if (!API_KEY || !CSE_ID) {
-        return "El comando de búsqueda de Google no está configurado. Faltan las claves de API en el archivo .env";
-    }
-    
+    if (!API_KEY || !CSE_ID) { return "El comando de búsqueda de Google no está configurado."; }
     const url = `https://www.googleapis.com/customsearch/v1?key=${API_KEY}&cx=${CSE_ID}&q=${encodeURIComponent(searchTerm)}`;
-
     try {
         const response = await axios.get(url);
         const results = response.data.items;
-
-        if (!results || results.length === 0) {
-            return `No se encontraron resultados en Google para *"${searchTerm}"*.`;
-        }
-
+        if (!results || results.length === 0) { return `No se encontraron resultados en Google para *"${searchTerm}"*.`; }
         let replyMessage = `Resultados de Google para *"${searchTerm}"*:\n\n`;
         results.slice(0, 4).forEach((result, index) => {
-            replyMessage += `*${index + 1}. ${result.title}*\n`;
-            replyMessage += `_${result.snippet}_\n`;
-            replyMessage += `${result.link}\n\n`;
+            replyMessage += `*${index + 1}. ${result.title}*\n_${result.snippet}_\n${result.link}\n\n`;
         });
         return replyMessage;
-
     } catch (error) {
         console.error("Error en búsqueda de Google API:", error.response ? error.response.data : error.message);
         return "Hubo un error al conectar con la API de Google.";
     }
 }
 
+
+ // patente //
 async function handlePatenteSearch(message) {
     const patente = message.body.substring(message.body.indexOf(' ') + 1).trim();
     if (!patente) {

@@ -8,7 +8,7 @@ const nationalTeamService = require('../services/nationalTeam.service');
 const economyService = require('../services/economy.service');
 const horoscopeService = require('../services/horoscope.service');
 const externalService = require('../services/external.service');
-const messagingService = require('../services/messaging.service.js');
+
 
 // --- Importaciones de Manejadores (Handlers) ---
 const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require('../services/league.service.js');
@@ -31,7 +31,8 @@ async function commandHandler(client, message) {
     if (/\b(bot|boot|bott|bbot)\b/.test(rawText)) {
         return handleBotMention(client, message);
     }
-    if (/\b(once|onse|11)\b/.test(rawText)) {
+    // Comprueba si el mensaje es *exactamente* 'once', 'onse', o '11'.
+    if (rawText === 'once' || rawText === 'onse' || rawText === '11') {
         return handleOnce(client, message);
     }
 

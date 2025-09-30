@@ -1,7 +1,12 @@
-// index.js (VERSIÓN FINAL Y ESTABLE)
+// index.js (CORREGIDO CON dotenv AL PRINCIPIO)
 "use strict";
 
-const { Client, LocalAuth } = require('whatsapp-web.js'); // Reactivamos LocalAuth
+// 1. ESTA DEBE SER LA PRIMERA LÍNEA DE TODO EL ARCHIVO
+// Carga las variables de entorno ANTES que cualquier otro módulo.
+require('dotenv').config();
+
+// 2. Ahora, importa el resto de tus módulos
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const commandHandler = require('./src/handlers/command.handler');
 const { handleMessageCreate, handleMessageUpdate, handleMessageRevoke } = require('./src/handlers/events.handler');
@@ -10,7 +15,7 @@ const express = require('express');
 console.log("Iniciando Botillero v2.0 (Arquitectura Modular)...");
 
 const client = new Client({
-    authStrategy: new LocalAuth(), // LÍNEA RESTAURADA
+    authStrategy: new LocalAuth(),
     puppeteer: { 
         headless: true, 
         args: ['--no-sandbox'] 
