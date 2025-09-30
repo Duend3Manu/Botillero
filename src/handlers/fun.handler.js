@@ -92,7 +92,8 @@ async function handleSound(client, message, command) {
 
     if (fs.existsSync(audioPath)) {
         await message.react(soundInfo.reaction);
-        const media = MessageMedia.fromFilePath(audioPath);
+        const fileBuffer = fs.readFileSync(audioPath);
+        const media = new MessageMedia('audio/mpeg', fileBuffer.toString('base64'), soundInfo.file);
         message.reply(media, undefined, { sendAudioAsVoice: true });
     } else {
         message.reply(`No se encontró el archivo de audio para "!${command}".`);
@@ -114,7 +115,9 @@ async function handleJoke(client, message) {
     const randomIndex = Math.floor(Math.random() * files.length);
     const audioPath = path.join(folderPath, files[randomIndex]);
     
-    const media = MessageMedia.fromFilePath(audioPath);
+    const fileBuffer = fs.readFileSync(audioPath);
+    const fileName = path.basename(audioPath);
+    const media = new MessageMedia('audio/mpeg', fileBuffer.toString('base64'), fileName);
     message.reply(media, undefined, { sendAudioAsVoice: true });
 }
 
