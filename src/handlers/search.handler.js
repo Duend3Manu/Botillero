@@ -1,9 +1,8 @@
-// src/handlers/search.handler.js
 "use strict";
 
 const axios = require('axios');
 const cheerio = require('cheerio');
-const GoogleIt = require('google-it');
+// Se elimina la importación de 'google-it' porque ya no se usa.
 const { getPatenteDataFormatted } = require('../utils/apiService');
 
 async function handleWikiSearch(message) {
@@ -62,33 +61,42 @@ async function handleNews(message) {
     }
 }
 
+// --- FUNCIÓN DE BÚSQUEDA DE GOOGLE CORREGIDA ---
 async function handleGoogleSearch(message) {
     const searchTerm = message.body.substring(message.body.indexOf(' ') + 1).trim();
     if (!searchTerm) {
         return "Escribe algo para buscar en Google. Ejemplo: `!g gatitos`";
     }
+
+    // Leemos las claves desde el archivo .env DENTRO de la función
+    const API_KEY = process.env.GOOGLE_API_KEY;
+    const CSE_ID = process.env.GOOGLE_CSE_ID;
+
+    if (!API_KEY || !CSE_ID) {
+        return "El comando de búsqueda de Google no está configurado. Faltan las claves de API en el archivo .env";
+    }
     
+    const url = `https://www.googleapis.com/customsearch/v1?key=${API_KEY}&cx=${CSE_ID}&q=${encodeURIComponent(searchTerm)}`;
+
     try {
-        const results = await GoogleIt({ query: searchTerm });
-        
-        // --- INICIO DE LA MEJORA ---
-        // 1. Verificamos si la respuesta es válida y tiene resultados.
+        const response = await axios.get(url);
+        const results = response.data.items;
+
         if (!results || results.length === 0) {
-            console.log("La librería google-it no devolvió resultados para:", searchTerm);
             return `No se encontraron resultados en Google para *"${searchTerm}"*.`;
         }
-        // --- FIN DE LA MEJORA ---
 
-        let response = `Resultados de Google para *"${searchTerm}"*:\n\n`;
+        let replyMessage = `Resultados de Google para *"${searchTerm}"*:\n\n`;
         results.slice(0, 4).forEach((result, index) => {
-            response += `*${index + 1}. ${result.title}*\n`;
-            response += `_${result.snippet}_\n`;
-            response += `${result.link}\n\n`;
+            replyMessage += `*${index + 1}. ${result.title}*\n`;
+            replyMessage += `_${result.snippet}_\n`;
+            replyMessage += `${result.link}\n\n`;
         });
-        return response;
+        return replyMessage;
+
     } catch (error) {
-        console.error("Error en búsqueda de Google:", error);
-        return "Hubo un error al buscar en Google.";
+        console.error("Error en búsqueda de Google API:", error.response ? error.response.data : error.message);
+        return "Hubo un error al conectar con la API de Google.";
     }
 }
 
