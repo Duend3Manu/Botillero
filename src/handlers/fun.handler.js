@@ -1,4 +1,3 @@
-// src/handlers/fun.handler.js
 "use strict";
 
 const fs = require('fs');
@@ -6,7 +5,10 @@ const path = require('path');
 const moment = require('moment-timezone');
 const { MessageMedia } = require('whatsapp-web.js');
 
+// Ya no necesitamos especificar la ruta de ffmpeg porque no lo usaremos en este método
+
 // --- Lógica para Stickers ---
+// ... (Tu código de stickers, etc., se mantiene igual)
 async function handleSticker(client, message) {
     let mediaMessage = message;
     if (message.hasQuotedMsg) {
@@ -29,8 +31,10 @@ async function handleSticker(client, message) {
     }
 }
 
+
 // --- Lógica para Sonidos ---
 const soundMap = {
+    // ... tu lista de sonidos ...
     'mataron': { file: 'mataron.mp3', reaction: '😂' }, 'muerte': { file: 'muerte.mp3', reaction: '😂' },
     'muerte2': { file: 'muerte2.mp3', reaction: '😂' }, 'muerte3': { file: 'muerte3.mp3', reaction: '😂' },
     'muerte4': { file: 'muerte4.mp3', reaction: '😂' }, 'neme': { file: 'neme.mp3', reaction: '🏳️‍🌈' },
@@ -88,13 +92,20 @@ async function handleSound(client, message, command) {
     const soundInfo = soundMap[command];
     if (!soundInfo) return;
 
-    const audioPath = path.join(__dirname, '..', '..', 'mp3', soundInfo.file);
+    const audioPath = path.resolve(__dirname, '..', '..', 'mp3', soundInfo.file);
 
     if (fs.existsSync(audioPath)) {
-        await message.react(soundInfo.reaction);
-        const fileBuffer = fs.readFileSync(audioPath);
-        const media = new MessageMedia('audio/mpeg', fileBuffer.toString('base64'), soundInfo.file);
-        message.reply(media, undefined, { sendAudioAsVoice: true });
+        try {
+            await message.react(soundInfo.reaction);
+            const media = MessageMedia.fromFilePath(audioPath);
+            
+            // MÉTODO DE ENVÍO SEGURO (COMO TU BOT ANTIGUO)
+            await client.sendMessage(message.from, media, { sendMediaAsDocument: false });
+
+        } catch (e) {
+            console.error(`Error al enviar el sonido para el comando !${command}:`, e);
+            message.reply(`Hubo un error al procesar el audio para "!${command}".`);
+        }
     } else {
         message.reply(`No se encontró el archivo de audio para "!${command}".`);
         console.error(`Archivo no encontrado: ${audioPath}`);
@@ -105,8 +116,9 @@ function getSoundCommands() {
     return soundList;
 }
 
+// ... El resto de tus funciones (handleJoke, handleCountdown, etc.) se mantienen exactamente igual ...
 async function handleJoke(client, message) {
-    const folderPath = path.join(__dirname, '..', '..', 'chistes');
+    const folderPath = path.resolve(__dirname, '..', '..', 'chistes');
     if (!fs.existsSync(folderPath)) return message.reply("La carpeta de chistes no está configurada.");
 
     const files = fs.readdirSync(folderPath);
@@ -115,9 +127,7 @@ async function handleJoke(client, message) {
     const randomIndex = Math.floor(Math.random() * files.length);
     const audioPath = path.join(folderPath, files[randomIndex]);
     
-    const fileBuffer = fs.readFileSync(audioPath);
-    const fileName = path.basename(audioPath);
-    const media = new MessageMedia('audio/mpeg', fileBuffer.toString('base64'), fileName);
+    const media = MessageMedia.fromFilePath(audioPath);
     message.reply(media, undefined, { sendAudioAsVoice: true });
 }
 
@@ -138,7 +148,7 @@ function handleCountdown(command) {
     const year = moment().year();
     switch (command) {
         case '18':
-            return getCountdownMessage(moment.tz(`${year}-09-18 00:00:00`, 'America/Santiago'), 'el 18', '�🇱');
+            return getCountdownMessage(moment.tz(`${year}-09-18 00:00:00`, 'America/Santiago'), 'el 18', '🇨🇱');
         case 'navidad':
             return getCountdownMessage(moment.tz(`${year}-12-25 00:00:00`, 'America/Santiago'), 'Navidad', '🎅');
         case 'añonuevo':
@@ -189,13 +199,12 @@ const frases = {
     37: 'Mi antivirus te tiene en la lista negra por ser terrible fome.',
     38: 'Te compilo la vida, pero con puros errores y warnings, pa que te cueste.',
     39: 'Me deci bot y te meto un DDoS al refri pa que se te eche a perder el pollo, wn.',
-    40: '¿Bot? Ojalá tu internet ande más lento que VTR en día de lluvia.',
+    40: '¿Y vo creí que soy la Teletón? ¿Que te ayudo 24/7? No po, wn.',
     41: 'Ando con menos paciencia que el Chino Ríos en una conferencia.',
-    42: '¿Y vo creí que soy la Teletón? ¿Que te ayudo 24/7? No po, wn.',
-    43: 'Estoy procesando... lo poco y na\' que me importa. Lol.',
-    44: 'Wena, te ganaste el Copihue de Oro al comentario más inútil. ¡Un aplauso! 👏',
-    45: 'Le poní más color que la Doctora Polo, wn.',
-    46: 'Jajaja, qué chistoso. Me río en binario: 01101000 01100001 01101000 01100001.'
+    42: 'Estoy procesando... lo poco y na\´ que me importa. Lol.',
+    43: 'Wena, te ganaste el Copihue de Oro al comentario más inútil. ¡Un aplauso! 👏',
+    44: 'Le poní más color que la Doctora Polo, wn.',
+    45: 'Jajaja, qué chistoso. Me río en binario: 01101000 01100001 01101000 01100001.'
 };
 let usedPhrases = [];
 
@@ -238,7 +247,6 @@ async function handleOnce(client, message) {
         console.error("Error en handleOnce:", e);
     }
 }
-
 
 module.exports = {
     handleSticker,

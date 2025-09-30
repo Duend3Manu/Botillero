@@ -1,60 +1,117 @@
-// src/handlers/personalsearch.handler.js
 "use strict";
 
-const { getPatenteDataFormatted, getRutData } = require('../utils/apiService');
+const puppeteer = require('puppeteer');
+const axios = require('axios'); // Lo dejamos por si otras funciones lo usan
+const FormData = require('form-data');
+const { MessageMedia } = require('whatsapp-web.js');
+/**
+ * Busca información de un número de teléfono usando la API de Celuzador.
+ */
+async function handlePhoneSearch(client, message) {
+    const phoneNumber = message.body.replace(/^!tel|^!num/i, '').trim();
 
+    if (!phoneNumber) {
+        return message.reply('⚠️ Por favor, ingresa un número de teléfono después del comando. Ej: `!tel 56912345678`');
+    }
+
+    try {
+        await message.react('⏳');
+
+        let data = new FormData();
+        data.append('tlfWA', phoneNumber);
+
+        let config = {
+            method: 'post',
+            maxBodyLength: Infinity,
+            url: 'https://celuzador.porsilapongo.cl/celuzadorApi.php',
+            headers: { 
+                'User-Agent': 'CeludeitorAPI-TuCulitoSacaLlamaAUFAUF', 
+                ...data.getHeaders()
+            },
+            data: data
+        };
+
+        const response = await axios.request(config);
+
+        if (response.data.estado === 'correcto') {
+            await message.react('✅');
+            const responseData = response.data.data;
+            const urlMatch = responseData.match(/\*Link Foto\* : (https?:\/\/[^\s]+)/);
+
+            if (urlMatch && urlMatch[1]) {
+                const imageUrl = urlMatch[1];
+                const media = await MessageMedia.fromUrl(imageUrl, { unsafeMime: true });
+                await client.sendMessage(message.from, media, { caption: responseData });
+            } else {
+                await message.reply(responseData);
+            }
+        } else {
+            await message.react('❌');
+            await message.reply(response.data.data);
+        }
+    } catch (error) {
+        console.error("Error en la función handlePhoneSearch:", error);
+        await message.react('❌');
+        await message.reply('⚠️ Hubo un error al consultar la API. Intenta nuevamente más tarde.');
+    }
+}
+
+/**
+ * Busca información de una patente de vehículo.
+ */
 async function handlePatenteSearch(message) {
-    const patente = message.body.replace(/!patente|!pat/i, '').trim();
-    if (!patente || patente.length !== 6) {
-        return message.reply(`🚨 El formato de la patente es inválido.\n\n*Usa:* \`!pat ABC123\`\nDebe tener *6 caracteres*, solo letras y números, sin espacios.`);
+    const patente = message.body.split(' ')[1];
+
+    if (!patente) {
+        return message.reply('Debes ingresar una patente. Ejemplo: `!pat XL3525`');
     }
-    
-    await message.react('⏳');
-    const nombre = message._data.notifyName || 'amigo(a)';
-    await message.reply(`¡Hola ${nombre}! 🚗 Estoy procesando tu consulta de patente *${patente.toUpperCase()}*...`);
-    
-    const result = await getPatenteDataFormatted(patente);
-    await message.react(result.error ? '❌' : '✅');
-    return message.reply(result.error ? result.message : result.data);
+
+    const url = `https://infoflow.cloud/patlite.php?pat=${patente}`;
+    console.log(`(DEBUG) -> Consultando URL de patente: ${url}`);
+
+    try {
+        await message.react('🚗');
+
+        const response = await axios.get(url, {
+            headers: {
+                'User-Agent': 'tuCulitoSacaLlama-SV'
+            }
+        });
+
+        const data = response.data;
+
+        if (data.valido === true) {
+            await message.react('✅');
+            const info = data.info.Respuesta;
+            
+            const replyMessage = `
+✅ *Información de la Patente: ${info.plate}*
+
+🚗 *Marca/Modelo:* ${info.brand} ${info.model} (${info.year})
+🎨 *Color:* ${info.color}
+📋 *Tipo:* ${info.typeDescription}
+
+👤 *Propietario:* ${info.name}
+🆔 *RUT:* ${info.numberOfIdentification}-${info.verifierDigit}
+
+🔧 *N° Motor:* ${info.engine}
+🔩 *N° Chasis:* ${info.chassis}
+            `.trim();
+
+            await message.reply(replyMessage);
+        } else {
+            await message.react('❌');
+            await message.reply(`La patente *${data.patente}* no es válida o no se encontró.`);
+        }
+    } catch (error) {
+        await message.react('❌');
+        console.error("Error al buscar la patente:", error);
+        await message.reply('Ocurrió un error al consultar el servicio de patentes. Intenta de nuevo.');
+    }
 }
 
-async function handleTneSearch(message) {
-    const rutRegex = /([0-9]{1,9}-?[0-9kK])$/i;
-    const matchRut = message.body.match(rutRegex);
-
-    if (!matchRut) {
-        return message.reply("Debes ingresar un RUT válido después del comando. Ejemplo: `!tne 12345678-9`");
-    }
-    
-    const rut = matchRut[1];
-    await message.react('⏳');
-    await message.reply(`Estoy buscando información para el RUT *${rut.toUpperCase()}*...`);
-
-    const result = await getRutData(rut);
-
-    let responseText;
-    if (result.error) {
-        responseText = `⚠️ Error al buscar el RUT *${rut.toUpperCase()}*: ${result.message}`;
-    } else {
-        const userData = result.data;
-        responseText = `
-👤 *Datos de la TNE (RUT: ${rut.toUpperCase()})*:
-
-📛 *Nombre Completo:* ${userData.primerNombre || 'No disponible'} ${userData.apellidoPaterno || 'No disponible'}
-🔢 *Folio TNE:* ${userData.tneFolio || 'No disponible'}
-🗓️ *Período TNE:* ${userData.tnePeriodo || 'No disponible'}
-🎓 *Tipo de TNE:* ${userData.tneTipo || 'No disponible'}
-✅ *Estado TNE:* ${userData.tneEstado || 'No disponible'}
-📅 *Fecha de Solicitud:* ${userData.soliFech || 'No disponible'}
-📝 *Estado de Solicitud:* ${userData.soliEstado || 'No disponible'}
-ℹ️ *Observaciones:* ${userData.observaciones || 'No disponible'}
-        `.trim();
-    }
-    
-    return message.reply(responseText);
-}
-
+// Exporta todas las funciones del módulo
 module.exports = {
-    handlePatenteSearch,
-    handleTneSearch
+    handlePhoneSearch,
+    handlePatenteSearch
 };

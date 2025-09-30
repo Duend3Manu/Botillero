@@ -1,7 +1,7 @@
-// index.js (VERSIÓN FINAL DE PRODUCCIÓN)
+// index.js (VERSIÓN FINAL Y ESTABLE)
 "use strict";
 
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth } = require('whatsapp-web.js'); // Reactivamos LocalAuth
 const qrcode = require('qrcode-terminal');
 const commandHandler = require('./src/handlers/command.handler');
 const { handleMessageCreate, handleMessageUpdate, handleMessageRevoke } = require('./src/handlers/events.handler');
@@ -10,8 +10,11 @@ const express = require('express');
 console.log("Iniciando Botillero v2.0 (Arquitectura Modular)...");
 
 const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: { headless: true, args: ['--no-sandbox'] }
+    authStrategy: new LocalAuth(), // LÍNEA RESTAURADA
+    puppeteer: { 
+        headless: true, 
+        args: ['--no-sandbox'] 
+    }
 });
 
 client.on('qr', qr => {
@@ -26,7 +29,6 @@ client.on('ready', () => {
 // --- MANEJADORES DE EVENTOS ---
 client.on('message', message => commandHandler(client, message));
 client.on('message_create', message => handleMessageCreate(message));
-// LÍNEA CORREGIDA:
 client.on('message_revoke_everyone', (after, before) => handleMessageRevoke(client, after, before));
 client.on('message_update', message => handleMessageUpdate(client, message));
 
