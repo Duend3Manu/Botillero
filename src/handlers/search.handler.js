@@ -1,5 +1,7 @@
 "use strict";
 
+const util = require('util');
+const exec = util.promisify(require('child_process').exec);
 const axios = require('axios');
 const cheerio = require('cheerio');
 const geminiService = require('../services/gemini.service.js');
@@ -11,35 +13,35 @@ async function handleWikiSearch(message) {
     if (!searchTerm) {
         return "Por favor, escribe un término para buscar en Wikipedia. Ejemplo: `!wiki Chile`";
     }
-
+    
+    await message.react('⏳');
+    
     try {
+        // Usaremos el endpoint de OpenSearch que es más directo para resúmenes
         const response = await axios.get('https://es.wikipedia.org/w/api.php', {
             params: {
-                action: 'query',
-                format: 'json',
-                list: 'search',
-                srsearch: searchTerm,
-                utf8: 1,
-                srlimit: 3,
-            },
+                action: 'opensearch',
+                search: searchTerm,
+                limit: 1, // Solo queremos el resultado más relevante
+                namespace: 0,
+                format: 'json'
+            }
         });
 
-        if (response.data.query.search.length === 0) {
+        // La respuesta de opensearch es un array: [término, [títulos], [descripciones], [links]]
+        const titles = response.data[1];
+        const descriptions = response.data[2];
+        const links = response.data[3];
+
+        if (titles.length === 0) {
+            await message.react('❌');
             return `No se encontraron resultados en Wikipedia para "${searchTerm}".`;
         }
 
-        let replyMessage = `Resultados de Wikipedia para *"${searchTerm}"*:\n\n`;
-        for (const result of response.data.query.search) {
-            const articleLink = `https://es.wikipedia.org/wiki/${encodeURIComponent(result.title)}`;
-            const cleanSnippet = result.snippet.replace(/<span class="searchmatch">/g, '*').replace(/<\/span>/g, '*');
-            
-            replyMessage += `*${result.title}*\n`;
-            replyMessage += `_${cleanSnippet}..._\n`;
-            replyMessage += `${articleLink}\n\n`;
-        }
-        return replyMessage;
-
+        await message.react('✅');
+        return `📖 *${titles[0]}*\n\n${descriptions[0]}...\n\n*Fuente:* ${links[0]}`;
     } catch (error) {
+        await message.react('❌');
         console.error('Error en la búsqueda de Wikipedia:', error);
         return 'Ocurrió un error al buscar en Wikipedia.';
     }

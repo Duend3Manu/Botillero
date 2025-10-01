@@ -1,17 +1,19 @@
+# -*- coding: utf-8 -*-
 import sys
 from bs4 import BeautifulSoup
 import requests
 from unidecode import unidecode
+import io
 
 # Configurar la salida estándar para soportar UTF-8 (importante para emojis)
-sys.stdout.reconfigure(encoding='utf-8')
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # --- DICCIONARIOS Y LISTAS DE CONFIGURACIÓN ---
 LINES = ['Línea 1', 'Línea 2', 'Línea 3', 'Línea 4', 'Línea 4a', 'Línea 5', 'Línea 6']
 STATUSES = {
-    'estado1': 'Estación Operativa',
+    'estado1': 'Operativa',
     'estado4': 'Accesos Cerrados',
-    'estado2': 'Estación Cerrada Temporalmente'
+    'estado2': 'Estación Cerrada'
 }
 COLORS = {
     'Línea 1': '🔴',
@@ -24,6 +26,32 @@ COLORS = {
 }
 
 # --- FUNCIONES ---
+
+def get_metrotren_status():
+    """
+    Extrae y muestra el estado de los servicios de EFE (Metrotren).
+    """
+    print("--- 🚆 Estado de Trenes (EFE) ---\n")
+    url = 'https://www.efe.cl/estado-de-la-red/'
+    try:
+        page = requests.get(url, timeout=10)
+        page.raise_for_status()
+        soup = BeautifulSoup(page.content, 'html.parser')
+        servicios = soup.select('div.flex.justify-between.items-center.p-4.rounded-lg.mb-4')
+        if not servicios:
+            print("No se pudo encontrar la información de estado de EFE.")
+            return
+        for servicio in servicios:
+            nombre_tag = servicio.find('h3')
+            estado_tag = servicio.find('p')
+            if nombre_tag and estado_tag:
+                nombre = nombre_tag.text.strip()
+                estado = estado_tag.text.strip()
+                if 'nos' in nombre.lower() or 'rancagua' in nombre.lower():
+                    print(f"{nombre}: {estado}")
+    except requests.exceptions.RequestException as e:
+        print(f"Error al conectar con el sitio de EFE: {e}")
+    print("\n" + "-"*40)
 
 def get_telegram_status():
     """
@@ -114,7 +142,8 @@ def get_metro_cl_status():
 
 def main():
     """Función principal que ejecuta los scrapers."""
-    get_telegram_status()
+    get_metrotren_status()
+    # get_telegram_status() # Descomentar si se quiere volver a usar
     get_metro_cl_status()
 
 if __name__ == '__main__':

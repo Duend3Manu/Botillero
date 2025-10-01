@@ -1,0 +1,12 @@
+{
+  "botName": "Botillero Xiaomi",
+  "clientId": "xiaomi-session",
+  "notificationGroupId": "56942803967-1481344936@g.us",
+  "mentionTriggers": false,
+  "enabledFeatures": [
+    "futbol",
+    "servicios",
+    "busquedas",
+    "ia"
+  ]
+}

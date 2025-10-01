@@ -1,0 +1,13 @@
+{
+  "botName": "Botillero",
+  "clientId": "botillero-session",
+  "notificationGroupId": "56933400670-1571689305@g.us",
+  "mentionTriggers": true,
+  "enabledFeatures": [
+    "sonidos",
+    "futbol",
+    "servicios",
+    "busquedas",
+    "ia"
+  ]
+}

@@ -4,7 +4,6 @@
 const axios = require('axios');
 const moment = require('moment-timezone');
 const puppeteer = require('puppeteer');
-const config = require('../config');
 const { generateWhatsAppMessage } = require('../utils/secService');
 
 async function handleFeriados() {
@@ -66,7 +65,7 @@ async function handleClima(message) {
     try {
         const response = await axios.get('http://api.weatherapi.com/v1/forecast.json', {
             params: {
-                key: config.weatherApiKey,
+                key: process.env.WEATHER_API_KEY, // Usamos la variable de entorno
                 q: city,
                 days: 1,
                 aqi: 'no',
@@ -183,55 +182,71 @@ async function handleSec(message) {
     return generateWhatsAppMessage(region);
 }
 
-// --- Lógica para !menu (CORREGIDA) ---
-function handleMenu() {
-    return `
-📜 *Comandos disponibles* 📜
+// --- FUNCIÓN DE MENÚ 100% COMPLETA Y DINÁMICA ---
+function handleMenu(config) {
+    let menu = `📜 *Comandos para ${config.botName}* 📜\n\n`;
 
-🌤️ *Clima*
-   \`!clima [ciudad]\`
-    
-💰 *Finanzas*
-   \`!valores\`
-    
-🥳 *Feriados*
-   \`!feriados\`, \`!18\`, \`!navidad\`
-    
-🏥 *Farmacias de Turno*
-   \`!far [comuna]\`
-    
-⚽ *Fútbol Chileno*
-   \`!tabla\` o \`!ligatabla\`
-   \`!prox\` o \`!ligapartidos\`
-    
-🇨🇱 *Selección Chilena*
-   \`!tclasi\` o \`!selecciontabla\`
-   \`!clasi\` o \`!seleccionpartidos\`
-    
-� *Metro de Santiago*
-   \`!metro\`
-    
-🔍 *Búsquedas*
-   \`!pat [patente]\`
-   \`!wiki [término]\`
-   \`!g [término]\`
-    
-🤖 *Crear Sticker*
-   Responde \`!s\` a una imagen/gif/video
-    
-🎵 *Audios*
-   \`!audios\` o \`!sonidos\` para la lista
-    
-🌋 *Info Geográfica*
-   \`!sismos\`
-   \`!bus [código_paradero]\`
-    
-💡 *Suministro Eléctrico*
-   \`!sec\` (Nacional) o \`!secrm\` (RM)
-    
-🇨🇱 *Otros*
-   \`!ping\`
-    `.trim();
+    if (config.enabledFeatures.includes('servicios')) {
+        let serviciosSection = `*Servicios y Utilidad* 🛠️
+ \`!valores\` - Indicadores económicos con análisis IA.
+ \`!clima [ciudad]\` - Clima actual.
+ \`!feriados\` - Próximos 5 feriados.
+ \`!far [comuna]\` - Farmacias de turno.
+ \`!metro\` - Estado de la red de Metro.
+ \`!sismos\` - Últimos 5 sismos.
+ \`!bus [paradero]\` - Próximas llegadas de buses.\n \`!bencina [comuna]\` - Bencineras más baratas.`;
+
+        if (config.enabledFeatures.includes('horoscopo')) {
+            serviciosSection += `\n \`!horoscopo [signo]\` - Horóscopo diario.`;
+        }
+        serviciosSection += `\n \`!sec\` o \`!secrm\` - Cortes de luz programados.`;
+        menu += serviciosSection.trim() + '\n\n';
+    }
+
+    if (config.enabledFeatures.includes('futbol')) {
+        menu += `
+*Fútbol* ⚽
+ \`!tabla\` - Tabla de posiciones del torneo nacional.
+ \`!prox\` - Próximos partidos del torneo.
+ \`!partidos\` - Resumen de la última fecha.
+ \`!tclasi\` - Tabla de clasificatorias.
+ \`!clasi\` - Partidos de la selección.
+`.trim() + '\n\n';
+    }
+
+    if (config.enabledFeatures.includes('busquedas')) {
+        menu += `
+*Búsquedas* 🔍
+ \`!g [búsqueda]\` - Busca en Google.
+ \`!wiki [búsqueda]\` - Busca en Wikipedia.
+ \`!noticias\` - Resumen de noticias de Chile.
+ \`!pat [patente]\` - Busca información de un vehículo.
+ \`!num [número]\` - Busca información de un número celular.
+ \`!whois [dominio/ip]\` - Analiza un dominio o IP.
+`.trim() + '\n\n';
+    }
+
+    if (config.enabledFeatures.includes('sonidos') || config.enabledFeatures.includes('diversion')) {
+        let diversionSection = '*Diversión* 🎉\n \`!s\` - Crea un Sticker (respondiendo a imagen/video).\n \`!chiste\` - Cuenta un chiste en audio.\n';
+        if (config.enabledFeatures.includes('sonidos')) {
+            diversionSection += ' \`!audios\` - Muestra la lista de sonidos.\n';
+        }
+        menu += diversionSection + '\n';
+    }
+
+    menu += `
+*Otros* 🤖`;
+    menu += `\n   \`!ping\``;
+    menu += `\n   \`!id\` - Muestra el ID del chat.`;
+    if (config.enabledFeatures.includes('stateful')) { // Asumiendo que 'ticket' y 'caso' son parte de 'stateful'
+        menu += `\n   \`!ticket\` - Sistema de tickets/tareas.`;
+        menu += `\n   \`!caso\` - Registra un "caso aislado".`;
+    }
+    menu += `\n   \`!todos\` - Etiqueta a todos los miembros del grupo.`;
+    menu += `\n   \`!menu\` - Muestra este menú.`;
+    menu = menu.trim();
+
+    return menu;
 }
 
 module.exports = { 

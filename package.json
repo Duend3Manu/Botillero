@@ -15,5 +15,9 @@
     "sqlite3": "^5.1.7",
     "systeminformation": "^5.27.7",
     "whatsapp-web.js": "^1.34.1"
+  },
+  "scripts": {
+    "botillero": "node index.js botillero",
+    "xiaomi": "node index.js botillero_xiaomi"
   }
 }
