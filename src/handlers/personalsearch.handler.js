@@ -4,6 +4,7 @@ const puppeteer = require('puppeteer');
 const axios = require('axios'); // Lo dejamos por si otras funciones lo usan
 const FormData = require('form-data');
 const { MessageMedia } = require('whatsapp-web.js');
+const { safeReact } = require('../utils/reaction.util');
 /**
  * Busca información de un número de teléfono usando la API de Celuzador.
  */
@@ -15,7 +16,7 @@ async function handlePhoneSearch(client, message) {
     }
 
     try {
-        await message.react('⏳');
+        await safeReact(message, '⏳');
 
         let data = new FormData();
         data.append('tlfWA', phoneNumber);
@@ -34,7 +35,7 @@ async function handlePhoneSearch(client, message) {
         const response = await axios.request(config);
 
         if (response.data.estado === 'correcto') {
-            await message.react('✅');
+            await safeReact(message, '✅');
             const responseData = response.data.data;
             const urlMatch = responseData.match(/\*Link Foto\* : (https?:\/\/[^\s]+)/);
 
@@ -46,12 +47,12 @@ async function handlePhoneSearch(client, message) {
                 await message.reply(responseData);
             }
         } else {
-            await message.react('❌');
+            await safeReact(message, '❌');
             await message.reply(response.data.data);
         }
     } catch (error) {
         console.error("Error en la función handlePhoneSearch:", error);
-        await message.react('❌');
+        await safeReact(message, '❌');
         await message.reply('⚠️ Hubo un error al consultar la API. Intenta nuevamente más tarde.');
     }
 }
@@ -70,7 +71,7 @@ async function handlePatenteSearch(message) {
     console.log(`(DEBUG) -> Consultando URL de patente: ${url}`);
 
     try {
-        await message.react('🚗');
+        await safeReact(message, '🚗');
 
         const response = await axios.get(url, {
             headers: {
@@ -81,7 +82,7 @@ async function handlePatenteSearch(message) {
         const data = response.data;
 
         if (data.valido === true) {
-            await message.react('✅');
+            await safeReact(message, '✅');
             const info = data.info.Respuesta;
             
             const replyMessage = `
@@ -100,11 +101,11 @@ async function handlePatenteSearch(message) {
 
             await message.reply(replyMessage);
         } else {
-            await message.react('❌');
+            await safeReact(message, '❌');
             await message.reply(`La patente *${data.patente}* no es válida o no se encontró.`);
         }
     } catch (error) {
-        await message.react('❌');
+        await safeReact(message, '❌');
         console.error("Error al buscar la patente:", error);
         await message.reply('Ocurrió un error al consultar el servicio de patentes. Intenta de nuevo.');
     }

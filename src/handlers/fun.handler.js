@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { safeReact } = require('../utils/reaction.util');
 const moment = require('moment-timezone');
 const { MessageMedia } = require('whatsapp-web.js');
 
@@ -10,21 +11,31 @@ const { MessageMedia } = require('whatsapp-web.js');
 // --- Lógica para Stickers ---
 // ... (Tu código de stickers, etc., se mantiene igual)
 async function handleSticker(client, message) {
-    let mediaMessage = message;
+    let mediaMessage;
+
+    // Prioridad 1: Revisar si se está citando un mensaje con media.
     if (message.hasQuotedMsg) {
-        const quotedMsg = await message.getQuotedMessage();
-        if (quotedMsg.hasMedia) {
-            mediaMessage = quotedMsg;
+        try {
+            const quotedMsg = await message.getQuotedMessage();
+            if (quotedMsg && quotedMsg.hasMedia) {
+                mediaMessage = quotedMsg;
+            }
+        } catch (error) {
+            console.warn("No se pudo obtener el mensaje citado, probablemente fue borrado. Se intentará con el mensaje actual.");
         }
     }
-
-    if (mediaMessage.hasMedia && (mediaMessage.type === 'image' || mediaMessage.type === 'video' || mediaMessage.type === 'gif')) {
+    // Prioridad 2: Si no se encontró media en el mensaje citado (o no se pudo obtener), revisar el mensaje actual.
+    if (!mediaMessage && message.hasMedia) {
+        mediaMessage = message;
+    }
+    
+    if (mediaMessage && (mediaMessage.type === 'image' || mediaMessage.type === 'video' || mediaMessage.type === 'gif')) {
         try {
             const media = await mediaMessage.downloadMedia();
-            message.reply(media, undefined, { sendMediaAsSticker: true, stickerAuthor: "Botillero", stickerName: "Creado por Botillero" });
+            await client.sendMessage(message.from, media, { sendMediaAsSticker: true, stickerAuthor: "Botillero", stickerName: "Creado por Botillero" });
         } catch (e) {
-            message.reply("Hubo un error al crear el sticker.");
             console.error(e);
+            await message.reply("Hubo un error al crear el sticker.");
         }
     } else {
         message.reply("Responde a una imagen o video, o envía uno junto al comando `!s`.");
@@ -96,16 +107,7 @@ async function handleSound(client, message, command) {
 
     if (fs.existsSync(audioPath)) {
         try {
-            // --- INICIO DE LA MODIFICACIÓN ---
-            // Intentamos reaccionar, pero si falla, no detenemos todo el proceso.
-            try {
-                await message.react(soundInfo.reaction);
-            } catch (reactError) {
-                // Si la reacción falla, mostramos una advertencia en la consola en lugar de detener el bot.
-                console.warn(`(Advertencia) -> No se pudo reaccionar al mensaje para el comando !${command}. Error: ${reactError.message}`);
-            }
-            // --- FIN DE LA MODIFICACIÓN ---
-            
+            await safeReact(message, soundInfo.reaction);
             const media = MessageMedia.fromFilePath(audioPath);
             
             // Usamos el método de envío seguro que ya habías configurado.
@@ -127,17 +129,22 @@ function getSoundCommands() {
 
 // ... El resto de tus funciones (handleJoke, handleCountdown, etc.) se mantienen exactamente igual ...
 async function handleJoke(client, message) {
-    const folderPath = path.resolve(__dirname, '..', '..', 'chistes');
-    if (!fs.existsSync(folderPath)) return message.reply("La carpeta de chistes no está configurada.");
+    try {
+        const folderPath = path.resolve(__dirname, '..', '..', 'chistes');
+        if (!fs.existsSync(folderPath)) return message.reply("La carpeta de chistes no está configurada.");
 
-    const files = fs.readdirSync(folderPath);
-    if (files.length === 0) return message.reply("No hay chistes para contar.");
-    
-    const randomIndex = Math.floor(Math.random() * files.length);
-    const audioPath = path.join(folderPath, files[randomIndex]);
-    
-    const media = MessageMedia.fromFilePath(audioPath);
-    message.reply(media, undefined, { sendAudioAsVoice: true });
+        const files = fs.readdirSync(folderPath);
+        if (files.length === 0) return message.reply("No hay chistes para contar.");
+        
+        const randomIndex = Math.floor(Math.random() * files.length);
+        const audioPath = path.join(folderPath, files[randomIndex]);
+        
+        const media = MessageMedia.fromFilePath(audioPath);
+        await client.sendMessage(message.from, media, { sendAudioAsVoice: true });
+    } catch (error) {
+        console.error("Error en handleJoke:", error);
+        await message.reply("No pude contar el chiste, algo salió mal.");
+    }
 }
 
 function getCountdownMessage(targetDate, eventName, emoji) {
@@ -235,8 +242,8 @@ async function handleBotMention(client, message) {
     try {
         const contact = await message.getContact();
         const texto = obtenerFraseAleatoria();
-        
-        await message.react('🤡');
+
+        await safeReact(message, '🤡');
         await message.reply(`${texto}, @${contact.id.user}`, undefined, {
             mentions: [contact.id._serialized]
         });
@@ -248,7 +255,7 @@ async function handleBotMention(client, message) {
 async function handleOnce(client, message) {
     try {
         const contact = await message.getContact();
-        await message.react('😂');
+        await safeReact(message, '😂');
         await message.reply('Chupalo entonces @' + contact.id.user, undefined, { 
             mentions: [contact.id._serialized] 
         });

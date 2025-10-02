@@ -56,11 +56,16 @@ def obtener_partidos_fifa(url):
     driver.get(url)
     partidos_formateados = []
     try:
-        cookie_button = WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler")))
-        cookie_button.click()
+        # Aumentamos el tiempo de espera y hacemos opcional el botón de cookies
+        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        try:
+            cookie_button = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler")))
+            cookie_button.click()
+        except TimeoutException:
+            print("Advertencia: No se encontró o no se pudo hacer clic en el botón de cookies.", file=sys.stderr)
+
         driver.execute_script("window.scrollBy(0, 800);")
-        time.sleep(2)
-        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.CLASS_NAME, "matches-container_title__ATLsl")))
+        WebDriverWait(driver, 25).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".matches-container_title__ATLsl, .match-row_matchRowContainer__NoCRI")))
         
         html = driver.page_source
         soup = BeautifulSoup(html, 'html.parser')

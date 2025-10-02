@@ -4,6 +4,7 @@
 const axios = require('axios');
 const moment = require('moment-timezone');
 const puppeteer = require('puppeteer');
+const { safeReact } = require('../utils/reaction.util');
 const { generateWhatsAppMessage } = require('../utils/secService');
 
 async function handleFeriados() {
@@ -122,7 +123,7 @@ async function handleBus(message, client) {
         return client.sendMessage(message.from, "Debes indicar el código del paradero. Ejemplo: `!bus PA433`");
     }
 
-    await message.react('⏳');
+    await safeReact(message, '⏳');
     let browser;
     try {
         browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
@@ -157,13 +158,13 @@ async function handleBus(message, client) {
         });
         
         await browser.close();
-        await message.react('✅');
+        await safeReact(message, '✅');
         return client.sendMessage(message.from, reply.trim());
 
     } catch (error) {
         console.error("Error con Puppeteer en !bus:", error);
         if (browser) await browser.close();
-        await message.react('❌');
+        await safeReact(message, '❌');
         return client.sendMessage(message.from, `No se pudo obtener la información para el paradero *${paradero}*.`);
     }
 }

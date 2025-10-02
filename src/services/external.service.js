@@ -1,31 +1,17 @@
 // src/services/external.service.js
 "use strict";
 
-const util = require('util');
-const exec = util.promisify(require('child_process').exec);
-const path = require('path');
+const pythonService = require('./python.service.js'); // Usaremos el servicio centralizado
 const geminiService = require('./gemini.service.js'); // Importamos nuestro servicio de IA
 
 /**
  * Función unificada para ejecutar scripts de Python de forma segura.
- * @param {string} scriptName El nombre del script (ej: 'bencina.py').
- * @param {string[]} args Argumentos para pasar al script.
- * @returns {Promise<string>} La salida (stdout) del script.
+ * @deprecated Usar pythonService.executeScript en su lugar.
  */
 async function executePythonScript(scriptName, args = []) {
-    const scriptPath = path.resolve(__dirname, '..', '..', 'scripts', 'python', scriptName);
-    const command = `python "${scriptPath}" ${args.join(' ')}`;
-    
-    console.log(`(DEBUG) -> Ejecutando comando: ${command}`);
-    const { stdout, stderr } = await exec(command, { timeout: 20000 }); // Timeout de 20s
-
-    if (stderr) {
-        // Ignoramos los warnings de Wappalyzer que van a stderr pero no son errores fatales.
-        if (!stderr.includes("UserWarning: This is an old version of Wappalyzer.")) {
-            throw new Error(`Error en script ${scriptName}: ${stderr}`);
-        }
-    }
-    return stdout;
+    // Esta función ahora delega al servicio centralizado para mantener la consistencia.
+    console.warn(`(Deprecation) La función executePythonScript en external.service.js está obsoleta. Usando pythonService en su lugar.`);
+    return pythonService.executePythonScript(scriptName, args);
 }
 
 async function getBencinaData(comuna) {
@@ -33,7 +19,7 @@ async function getBencinaData(comuna) {
         return "Debes especificar una comuna. Ejemplo: `!bencina santiago`";
     }
     try {
-        const bencinaData = await executePythonScript('bencina.py', [comuna]);
+        const { stdout: bencinaData } = await pythonService.executePythonScript('bencina.py', [comuna]);
         return bencinaData;
     } catch (error) {
         console.error("Error en getBencinaData:", error.message);
@@ -43,7 +29,7 @@ async function getBencinaData(comuna) {
 
 async function getTransbankStatus() {
     try {
-        const stdout = await executePythonScript('transbank.py');
+        const { stdout } = await pythonService.executePythonScript('transbank.py');
 
         const statusData = JSON.parse(stdout);
         if (statusData.error) {
@@ -80,7 +66,7 @@ async function getTransbankStatus() {
 
 async function getBolsaData() {
     try {
-        const bolsaData = await executePythonScript('bolsa.py');
+        const { stdout: bolsaData } = await pythonService.executePythonScript('bolsa.py');
         return bolsaData;
     } catch (error) {
         console.error("Error en getBolsaData:", error.message);

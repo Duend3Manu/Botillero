@@ -1,71 +1,98 @@
 import os
 import subprocess
+import sys
+import io
 
-print("🚀 Script 'subir_a_github_v3.py' iniciado...\n")
+# --- INICIO DE LA SOLUCIÓN ---
+# Forzamos a que tanto la salida estándar como la de errores usen siempre UTF-8.
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+# --- FIN DE LA SOLUCIÓN ---
 
-# 🔐 Limpia index.lock si existe
-lock_path = '.git/index.lock'
-if os.path.exists(lock_path):
-    print("⚠️ Repositorio bloqueado por index.lock. Eliminando...")
-    os.remove(lock_path)
-    print("✅ Bloqueo eliminado.\n")
+def limpiar_bloqueo():
+    """Si existe un archivo .git/index.lock, lo elimina."""
+    lock_path = '.git/index.lock'
+    if os.path.exists(lock_path):
+        print("⚠️  Repositorio bloqueado. Eliminando .git/index.lock...")
+        os.remove(lock_path)
+        print("✅ Bloqueo eliminado.\n")
 
-# 🧭 Verifica si el remoto 'origin' está configurado
-remotes = subprocess.check_output("git remote", shell=True).decode()
-if "origin" not in remotes:
-    print("❌ No encontré un remoto llamado 'origin'. Agregalo con:")
-    print("   git remote add origin https://github.com/Duend3Manu/Botillero.git\n")
-    exit()
+def obtener_rama_actual():
+    """Obtiene el nombre de la rama de Git actual."""
+    try:
+        # Usamos subprocess.run para consistencia y mejor manejo de errores.
+        resultado = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, encoding='utf-8', check=True
+        )
+        return resultado.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"❌ No se pudo obtener la rama actual. Error: {e.stderr}", file=sys.stderr)
+        return None
 
-# 📦 Agrega todos los archivos
-subprocess.run("git add --all", shell=True)
+def ejecutar_comando(comando_lista, descripcion=""):
+    """Ejecuta un comando de subprocess de forma segura y verifica el resultado."""
+    print(f"🔧 Ejecutando: {descripcion or ' '.join(comando_lista)}")
+    resultado = subprocess.run(comando_lista, capture_output=True, text=True, encoding='utf-8')
+    
+    if resultado.returncode != 0:
+        print(f"❌ Falló este paso. Revisión necesaria.")
+        print("--- Salida de Error ---")
+        print(resultado.stderr)
+        print("-----------------------")
+        return False
+    
+    if resultado.stdout:
+        print(resultado.stdout.strip())
+    return True
 
-# 🧾 Revisa si hay algo para comitear
-status_output = subprocess.check_output("git status", shell=True).decode()
-if "Changes to be committed" not in status_output:
-    print("⚠️ No hay cambios para comitear. Nada que subir.\n")
-    exit()
+def main():
+    """Función principal del script."""
+    print("🚀 Script 'subir_a_github.py' iniciado...\n")
+    
+    limpiar_bloqueo()
 
-# 📋 Muestra resumen de cambios detectados
-print("📋 Cambios detectados:")
-for line in status_output.splitlines():
-    if line.strip().startswith("new file:") or line.strip().startswith("modified:"):
-        print("  -", line.strip())
-print("")
+    if not os.path.exists('.git'):
+        print("❌ Esta carpeta no parece ser un repositorio de Git.")
+        return
 
-# 🧠 Detecta conflictos previos antes de ejecutar push
-def conflicto_detectado():
-    resultado = subprocess.check_output("git status", shell=True).decode()
-    return "Unmerged paths" in resultado or "CONFLICT" in resultado
+    rama = obtener_rama_actual()
+    if not rama:
+        return
 
-if conflicto_detectado():
-    print("⚠️ Se detectaron conflictos en tu repo.")
-    print("👉 Tipos posibles: archivos duplicados, binarios cruzados, cambios simultáneos.")
-    print("🛠️ Soluciones recomendadas:")
-    print("   - git restore --staged <archivo>")
-    print("   - git rebase --abort   ← para cancelar y volver al estado anterior")
-    print("   - git reset --hard origin/main ← si querés reemplazar todo por lo remoto\n")
-    exit()
+    print(f"✅ Detectada la rama actual: '{rama}'\n")
 
-# ✍️ Mensaje de commit
-commit_message = input("📝 Escribí el mensaje del commit: ").strip()
-if not commit_message:
-    commit_message = "actualización sin descripción"
-    print("⚠️ Usando mensaje por defecto.\n")
+    # Verificamos el estado antes de hacer 'add' para ver si hay algo que subir.
+    status_result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, encoding='utf-8')
+    if not status_result.stdout.strip():
+        print("✅ No hay cambios para comitear. Tu repositorio ya está al día.")
+        return
 
-# ⛓️ Ejecuta comandos git (commit, pull --rebase, push)
-commands = [
-    f'git commit -m "{commit_message}"',
-    "git pull origin main --rebase",
-    "git push origin main"
-]
+    if not ejecutar_comando(["git", "add", "--all"], descripcion="Añadiendo todos los cambios al staging"):
+        return
 
-for cmd in commands:
-    print(f"🔧 Ejecutando: {cmd}")
-    result = subprocess.run(cmd, shell=True)
-    if result.returncode != 0:
-        print("❌ Falló este paso. Revisión necesaria.")
-        print("🔎 Podés revisar con: git status, git log, o git diff\n")
-        break
+    print("📋 Cambios detectados:")
+    # Reutilizamos el resultado que ya teníamos
+    status_short_result = subprocess.run(["git", "status", "-s"], capture_output=True, text=True, encoding='utf-8')
+    if status_short_result.stdout:
+        print(status_short_result.stdout)
 
-print("\n🎉 ¡Listo, Manu! Tu bot está subido a GitHub con ❤️ desde Botillero.\n")
+    commit_message = input("📝 Escribe el mensaje del commit: ").strip()
+    if not commit_message:
+        commit_message = "actualización sin descripción"
+        print("⚠️ Usando mensaje por defecto.\n")
+
+    if not ejecutar_comando(["git", "commit", "-m", commit_message], descripcion=f'git commit -m "{commit_message}"'):
+        return
+        
+    if not ejecutar_comando(["git", "pull", "origin", rama, "--rebase"], descripcion=f"git pull origin {rama} --rebase"):
+        print("🚨 El 'pull' falló. Puede que tengas un conflicto de merge que debas resolver manualmente.")
+        return
+        
+    if not ejecutar_comando(["git", "push", "origin", rama], descripcion=f"git push origin {rama}"):
+        return
+
+    print("\n🎉 ¡Listo, Manu! Tu código está seguro en GitHub.\n")
+
+if __name__ == "__main__":
+    main()

@@ -23,7 +23,12 @@ const commandKnowledgeBase = [
     { keywords: ['ayuda', 'comando', 'menu'], command: '!menu' }
 ];
 
-async function handleAiHelp(message) {
+/**
+ * Ayuda al usuario a encontrar el comando correcto basado en una consulta en lenguaje natural.
+ * Renombrado de handleAiHelp a handleAiChat para consistencia.
+ * @param {Message} message - El objeto del mensaje.
+ */
+async function handleAiChat(message) {
     const userQuery = message.body.substring(message.body.indexOf(' ') + 1).toLowerCase().trim();
 
     if (!userQuery || userQuery === 'ayuda') {
@@ -52,6 +57,16 @@ Inténtalo y avísame , y si te sirve bakan, y si no, me importa hectareas de...
     return "Las Weas, no cacho qué comando podría ayudarte con eso. 🤔\n\nPrueba a ser más específico wn o escribe `!menu` para ver la lista completa de comandos.";
 }
 
+/**
+ * Función para resumir texto. El contenido no fue provisto, pero se declara para que no falle la importación.
+ * @param {Message} message - El objeto del mensaje.
+ */
+async function handleSummarize(message) {
+    // Aquí iría la lógica para el comando !resumen, que no estaba definida.
+    return "El comando `!resumen` aún no está implementado.";
+}
+
 module.exports = {
-    handleAiHelp
+    handleAiChat,
+    handleSummarize
 };

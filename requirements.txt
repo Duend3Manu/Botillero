@@ -1,0 +1,28 @@
+# requirements.txt (Versión Final y 100% Completa)
+
+# --- Librerías de Red y Web Scraping ---
+requests
+aiohttp
+beautifulsoup4
+
+# --- Librerías de Análisis de Red (net_analyzer.py) ---
+python-whois
+dnspython
+ipapi
+python-Wappalyzer
+setuptools
+
+# --- Librerías de Formateo y Datos ---
+unidecode
+python-dateutil
+pandas
+tabulate
+
+# --- LIBRERÍAS FALTANTES (AÑADIDAS AHORA) ---
+
+# Para automatizar un navegador (usado en mundial.py)
+selenium
+webdriver-manager
+
+# Para scrapear Twitter/X de forma segura (usado en efe.py)
+ntscraper

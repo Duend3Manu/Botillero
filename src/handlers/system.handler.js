@@ -33,23 +33,18 @@ function getRAMUsage() {
 }
 
 // Obtiene el uso de CPU
-function getCPUUsage() {
-    const cpus = os.cpus();
-    let totalIdle = 0;
-    let totalTick = 0;
-    cpus.forEach((cpu) => {
-        for (let type in cpu.times) {
-            totalTick += cpu.times[type];
-        }
-        totalIdle += cpu.times.idle;
-    });
-    const idle = totalIdle / cpus.length;
-    const total = totalTick / cpus.length;
-    const usage = 100 - (idle / total) * 100;
-    return {
-        usage: usage.toFixed(2),
-        model: cpus[0].model,
-    };
+async function getCPUUsage() {
+    try {
+        const cpuData = await si.currentLoad();
+        const cpuInfo = await si.cpu();
+        return {
+            usage: cpuData.currentLoad.toFixed(2),
+            model: cpuInfo.manufacturer + ' ' + cpuInfo.brand,
+        };
+    } catch (error) {
+        console.error('Error al obtener el uso de CPU:', error);
+        return { usage: 'N/A', model: os.cpus()[0].model }; // Fallback
+    }
 }
 
 // Obtiene el uso de disco
@@ -85,7 +80,7 @@ async function handlePing(message) {
     const [pingTime, ramUsage, cpuUsage, diskUsage] = await Promise.all([
         checkPing(),
         getRAMUsage(),
-        getCPUUsage(),
+        getCPUUsage(), // Ahora es una función asíncrona
         getDiskUsage()
     ]);
 

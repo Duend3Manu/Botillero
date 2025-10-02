@@ -7,6 +7,7 @@ const cheerio = require('cheerio');
 const geminiService = require('../services/gemini.service.js');
 const { getPatenteDataFormatted } = require('../utils/apiService');
 const puppeteer = require('puppeteer');
+const { safeReact } = require('../utils/reaction.util');
 
 async function handleWikiSearch(message) {
     const searchTerm = message.body.substring(message.body.indexOf(' ') + 1).trim();
@@ -14,7 +15,7 @@ async function handleWikiSearch(message) {
         return "Por favor, escribe un término para buscar en Wikipedia. Ejemplo: `!wiki Chile`";
     }
     
-    await message.react('⏳');
+    await safeReact(message, '⏳');
     
     try {
         // Usaremos el endpoint de OpenSearch que es más directo para resúmenes
@@ -34,15 +35,16 @@ async function handleWikiSearch(message) {
         const links = response.data[3];
 
         if (titles.length === 0) {
-            await message.react('❌');
+            await safeReact(message, '❌');
             return `No se encontraron resultados en Wikipedia para "${searchTerm}".`;
         }
 
-        await message.react('✅');
+        await safeReact(message, '✅');
         return `📖 *${titles[0]}*\n\n${descriptions[0]}...\n\n*Fuente:* ${links[0]}`;
     } catch (error) {
-        await message.react('❌');
+        await safeReact(message, '❌');
         console.error('Error en la búsqueda de Wikipedia:', error);
+        // No se reacciona aquí porque ya se reaccionó en el if de arriba si no hay resultados.
         return 'Ocurrió un error al buscar en Wikipedia.';
     }
 }
@@ -50,7 +52,7 @@ async function handleWikiSearch(message) {
 // noticias //
 
 async function handleNews(message) {
-    await message.react('📰');
+    await safeReact(message, '📰');
     const url = 'http://chile.infoflow.cloud/p.php/infoflow2017/noticias-nacionales';
     let browser = null;
 
@@ -134,21 +136,10 @@ async function handleGoogleSearch(message) {
     }
 }
 
-
- // patente //
-async function handlePatenteSearch(message) {
-    const patente = message.body.substring(message.body.indexOf(' ') + 1).trim();
-    if (!patente) {
-        return "Debes ingresar una patente. Ejemplo: `!pat aabb12`";
-    }
-
-    const result = await getPatenteDataFormatted(patente);
-    return result.error ? result.message : result.data;
-}
-
 module.exports = {
     handleWikiSearch,
     handleNews,
-    handleGoogleSearch,
-    handlePatenteSearch
+    handleGoogleSearch
+    // Se elimina handlePatenteSearch de aquí para evitar duplicados.
+    // La versión correcta está en personalsearch.handler.js
 };

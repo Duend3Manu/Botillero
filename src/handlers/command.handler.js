@@ -11,14 +11,15 @@ const economyService = require('../services/economy.service');
 const horoscopeService = require('../services/horoscope.service');
 const externalService = require('../services/external.service');
 const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require('../services/league.service.js');
+const pythonService = require('../services/python.service'); // Importamos el servicio de Python
 
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');
 const { handleFeriados, handleFarmacias, handleClima, handleSismos, handleBus, handleSec, handleMenu } = require('./utility.handler');
-const { handleSticker, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce } = require('./fun.handler.js');
-const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler');
+const { handleSticker, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce } = require('./fun.handler');
+const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler'); // handlePatenteSearch se movió a personalsearch
 const { handleTicket, handleCaso } = require('./stateful.handler');
-const { handleAiChat, handleSummarize } = require('./ai.handler');
+const { handleAiHelp, handleSummarize } = require('./ai.handler'); // Corregido de handleAiChat a handleAiHelp
 const { handleTagAll } = require('./group.handler');
 const { handlePhoneSearch, handlePatenteSearch } = require('./personalsearch.handler');
 const { handleWhoisAnalysis } = require('./network.handler.js');
@@ -84,12 +85,12 @@ async function commandHandler(client, message, config) {
         case 'mundial':
             if (config.enabledFeatures.includes('futbol')) {
                 try {
-                    const { stdout, stderr } = await exec('python ./scripts/python/mundial.py');
-                    if (stderr) throw new Error(stderr);
+                    console.log(`(Handler) -> Ejecutando script de mundial...`);
+                    const { stdout } = await pythonService.executePythonScript('mundial.py');
                     replyMessage = stdout;
                 } catch (error) {
-                    console.error(`(Mundial Script) exec error: ${error}`);
-                    replyMessage = '❌ No se pudo obtener la información del mundial. Revisa la consola de errores del bot.';
+                    console.error(`(Mundial Script) Error: ${error.message}`);
+                    replyMessage = '❌ No se pudo obtener la información del mundial.';
                 }
             }
             break;
@@ -103,7 +104,10 @@ async function commandHandler(client, message, config) {
             break;
         case 'valores': 
             if (config.enabledFeatures.includes('servicios')) {
-                replyMessage = await economyService.getEconomicIndicators(); 
+                // La lógica para !valores estaba ausente, la he añadido usando el servicio existente.
+                const indicators = await economyService.getEconomicIndicators();
+                client.sendMessage(message.from, indicators);
+                return; // Se envía directamente, no necesita message.reply
             }
             break;
         case 'horoscopo':
@@ -202,12 +206,12 @@ async function commandHandler(client, message, config) {
 
         // --- Característica: "ia" ---
         case 'ayuda': case 'ia': case 'pregunta':
-            if (config.enabledFeatures.includes('ia')) {
-                return handleAiChat(message);
+            if (config.enabledFeatures.includes('ia')) { // Asumiendo que 'ia' es la característica
+                replyMessage = await handleAiHelp(message); // Corregido para usar la función existente
             }
             break;
         case 'resumen':
-            if (config.enabledFeatures.includes('ia')) {
+            if (config.enabledFeatures.includes('ia')) { // Asumiendo que 'ia' es la característica
                 return handleSummarize(message);
             }
             break;
@@ -215,7 +219,7 @@ async function commandHandler(client, message, config) {
         // --- Característica: "diversion" y "sonidos" ---
         case 's': 
             if (config.enabledFeatures.includes('diversion')) {
-                return handleSticker(client, message);
+                return handleSticker(client, message); // La llamada a handleSticker estaba ausente
             }
             break;
         case 'chiste': 

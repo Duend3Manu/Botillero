@@ -41,7 +41,7 @@ async function getEconomicIndicators() {
         const analysis = await geminiService.generateText(prompt);
 
         // 4. Devolvemos el mensaje completo
-        return `*Indicadores Económicos Hoy* 🤑\n\n${datosFormateados}\n\n*El Análisis del Botillero:*\n${analysis}`;
+        return `*Indicadores Económicos Hoy* 🤑\n\n${datosFormateados}\n\n*El Análisis del Botillero:*\n\n${analysis}`;
     } catch (error) {
         console.error("Error en getEconomicIndicators:", error);
         return "No pude obtener los indicadores económicos en este momento. 😔";
