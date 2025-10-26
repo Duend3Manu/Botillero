@@ -1,0 +1,11 @@
+{
+  "botName": "Botillero Xiaomi",
+  "clientId": "xiaomi-session",
+  "notificationGroupId": "ID_DEL_GRUPO_DEL_BOT_XIAOMI@g.us",
+  "mentionTriggers": false,
+  "disabledFeatures": [
+    "sonidos",
+    "horoscopo",
+    "chistes"
+  ]
+}
