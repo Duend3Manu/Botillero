@@ -1,90 +1,118 @@
 # -*- coding: utf-8 -*-
 import sys
-import requests
-from bs4 import BeautifulSoup
-from datetime import datetime
 import io
+from bs4 import BeautifulSoup
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 
 # Asegúrate de que la salida sea en UTF-8
 if sys.stdout.encoding != 'utf-8':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-meses_a_numero = {
-    'ene': 1, 'feb': 2, 'mar': 3, 'abr': 4, 'may': 5, 'jun': 6,
-    'jul': 7, 'ago': 8, 'sept': 9, 'oct': 10, 'nov': 11, 'dic': 12
-}
+urlas = 'https://chile.as.com/resultados/futbol/chile/jornada/'
 
-dias_semana = {
-    'L': 'Lunes', 'M': 'Martes', 'X': 'Miércoles', 'J': 'Jueves',
-    'V': 'Viernes', 'S': 'Sábado', 'D': 'Domingo'
-}
+options = webdriver.ChromeOptions()
+options.add_argument("--headless")
+options.add_argument("--disable-gpu")
+options.add_argument("--log-level=3")
+options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
-urlas = 'https://chile.as.com/resultados/futbol/chile/calendario/?omnil=mpal'
-page = requests.get(urlas)
+driver = None
+html_content = ""
 
-fecha_actual = datetime.now()
+try:
+    s = Service() 
+    driver = webdriver.Chrome(service=s, options=options)
 
-if page.status_code == 200:
-    soup = BeautifulSoup(page.content, 'html.parser')
-    jornadas_html = soup.find_all("div", {"class": "cont-modulo resultados"})
+    driver.get(urlas)
     
-    jornadas_candidatas = []
+
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.CLASS_NAME, "a_sd"))
+    )
     
-    for jornada_html in jornadas_html:
-        fecha_texto = jornada_html.find('h2').find('span').text.strip()
-        try:
-            # --- LÓGICA DE PARSEO A PRUEBA DE INCONSISTENCIAS ---
-            partes = fecha_texto.lower().replace('.', '').split(' - ')
-            
-            # Revisa si la primera parte tiene solo el día (formato "DD - DD Mmm")
-            if len(partes[0].split()) == 1 and partes[0].isdigit():
-                dia_inicio_str = partes[0]
-                # Tomamos el mes de la segunda parte
-                mes_inicio_str = partes[1].split()[1]
-            else: # Formato "DD Mmm - DD Mmm"
-                dia_inicio_str, mes_inicio_str = partes[0].split()
+    html_content = driver.page_source
 
-            mes_inicio_num = meses_a_numero[mes_inicio_str]
-            año_a_usar = fecha_actual.year
-            
-            fecha_inicio = datetime(año_a_usar, mes_inicio_num, int(dia_inicio_str))
-            
-            if fecha_inicio.date() <= fecha_actual.date():
-                jornadas_candidatas.append(jornada_html)
+except TimeoutException:
+    print("Error: La página cargó, pero el contenedor 'a_sd' (lista de partidos) no apareció después de 10s.")
+except Exception as e:
+    print(f"Error durante la carga con Selenium: {e.msg}")
+finally:
+    if driver:
+        driver.quit() 
 
-        except (ValueError, IndexError, KeyError) as e:
-            continue
+# --- (LÓGICA DE PARSEO CORREGIDA) ---
 
-    if jornadas_candidatas:
-        jornada_actual = jornadas_candidatas[-1]
+if html_content:
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    main_title_tag = soup.find("h1", {"class": "a_hd_t"})
+    if main_title_tag:
+        titulo_texto = main_title_tag.text.strip()
+        titulo_limpio = ' '.join(titulo_texto.split())
+        print(f"\n🏆 {titulo_limpio} 🏆")
+    
+    day_blocks = soup.find_all("div", {"class": "a_sd"})
+    
+    if not day_blocks:
+        print("Error: Se cargó el HTML pero no se encontraron bloques de día 'a_sd'.")
+    
+    for block in day_blocks:
+        day_title_tag = block.find("h2", {"class": "a_sd_t"})
+        if day_title_tag:
+            print(f"\n--- {day_title_tag.text.strip()} ---")
         
-        titulo = jornada_actual.find('h2').find('a').text.strip()
-        fecha_texto = jornada_actual.find('h2').find('span').text.strip()
+        matches = block.find_all("li", {"class": "a_sc_l_it"})
         
-        print(f"🏆 {titulo} 🏆")
-        print(f"🗓️ {fecha_texto}\n")
+        for match in matches:
+            try:
+                # Encontrar equipo local
+                local_team = match.find("div", {"class": "a_sc_tm"}).find("span", {"class": "a_sc_tn"}).text.strip()
+                
+                # Encontrar equipo visitante
+                away_team = match.find("div", {"class": "a_sc_tm a_sc_tm-r"}).find("span", {"class": "a_sc_tn"}).text.strip()
+                
+                # --- LÓGICA DE RESULTADO/HORA CORREGIDA ---
+                
+                # 1. Buscar si es un partido FUTURO
+                future_time_container = match.find("div", {"class": "a_sc_hr"})
+                
+                # 2. Buscar si es un partido JUGADO o EN VIVO
+                score_container = match.find("div", {"class": "a_sc_gl"})
+                
+                if future_time_container:
+                    # Es un partido FUTURO
+                    time_text = " ".join(future_time_container.text.split())
+                    print(f"⚽ {local_team} vs {away_team}\n   └─ {time_text}")
+                
+                elif score_container:
+                    # Es un partido JUGADO o EN VIVO
+                    score_text = " ".join(score_container.text.split())
+                    
+                    # Revisar el estado (Finalizado, 72', etc.)
+                    status_text = ""
+                    status_container = match.find("div", {"class": "a_sc_st"})
+                    if status_container:
+                        status_text = status_container.text.strip()
+                        
+                    if status_text == "Finalizado":
+                        print(f"✅ {local_team} | {score_text} | {away_team}")
+                    else:
+                        # Si no está finalizado, está EN VIVO (ej. "72'")
+                        print(f"▶️ {local_team} | {score_text} | {away_team}  ({status_text})")
+                
+                # Si no es ni 'a_sc_hr' ni 'a_sc_gl', no imprime nada (es un 'li' inválido)
 
-        partidos = jornada_actual.find('tbody').find_all('tr')
-        for partido in partidos:
-            equipo_local = partido.find('td', {"class": "col-equipo-local"}).text.strip()
-            resultado_tag = partido.find('td', {"class": "col-resultado"})
-            equipo_visitante = partido.find('td', {"class": "col-equipo-visitante"}).text.strip()
-            
-            resultado = resultado_tag.text.strip()
-            marcador = resultado if ' - ' in resultado else "vs"
-            
-            if marcador.replace(' ', '').replace('-', '').isdigit():
-                 print(f"✅ {equipo_local} | {marcador} | {equipo_visitante}")
-            else:
-                dia_hora = resultado
-                dia_letra = dia_hora[0] if dia_hora and not dia_hora[0].isdigit() else ""
-                hora = dia_hora[1:] if dia_letra else dia_hora
-                dia = dias_semana.get(dia_letra, "")
-                print(f"⚽ {equipo_local} vs {equipo_visitante}\n   └─ {dia} {hora}")
+            except AttributeError:
+                # Si una <li> no tiene la estructura de partido, la saltamos
+                continue
 
-        print("\n---------------------------------")
-    else:
-        print("No se encontró una jornada activa en la página.")
-
+    print("\n---------------------------------")
+    
 else:
-    print(f"Error en request: {page.status_code}")
+    print("No se pudo obtener el contenido HTML desde Selenium.")

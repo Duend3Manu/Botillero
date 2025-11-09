@@ -17,33 +17,25 @@ def main():
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             
-            # --- CONFIGURACIÓN ROBUSTA DEL NAVEGADOR ---
-            # Creamos un contexto que simula ser un navegador de escritorio normal
             context = browser.new_context(
                 user_agent=USER_AGENT,
                 viewport={'width': 1920, 'height': 1080}
             )
             page = context.new_page()
             
-            print("Navegando a la URL en entorno de servidor...")
-            
-            # --- CAMBIOS CLAVE PARA EVITAR TIMEOUT ---
-            # 1. Aumentamos el timeout general a 60 segundos.
-            # 2. Cambiamos 'networkidle' por 'domcontentloaded', que es más rápido y fiable.
             page.goto(url, wait_until='domcontentloaded', timeout=60000)
             
-            print("Página cargada. Esperando por el selector 'table.tabla-datos'...")
-            # Le damos un timeout generoso para que el contenido cargue
-            page.wait_for_selector('table.tabla-datos', timeout=45000)
+            # --- CAMBIO CLAVE: Esperamos la nueva tabla ---
+
+            # La nueva clase de la tabla es 'a_tb'
+            page.wait_for_selector('table.a_tb', timeout=45000)
             
-            print("¡Tabla encontrada! Obteniendo contenido...")
             content = page.content()
             browser.close()
 
     except PlaywrightTimeoutError as e:
         print("\n-------------------------------------------------------------")
         print("ERROR DE TIMEOUT: No se pudo cargar la página o encontrar la tabla a tiempo.")
-        print("Esto es común en entornos de servidor. La IP puede estar bloqueada o la red es lenta.")
         print(f"Detalles del error: {e}")
         print("-------------------------------------------------------------")
         sys.exit()
@@ -51,29 +43,47 @@ def main():
         print(f"\nOcurrió un error inesperado con Playwright: {e}")
         sys.exit()
 
-    # --- El resto del código es tu lógica original, que ya sabemos que funciona ---
+    # --- LÓGICA DE PARSEO ACTUALIZADA ---
     soup = BeautifulSoup(content, 'html.parser')
     tabla_de_datos = []
 
     try:
-        tabla_container = soup.find('table', class_='tabla-datos')
+        # 1. Buscamos la nueva tabla con clase 'a_tb'
+        tabla_container = soup.find('table', class_='a_tb')
         
-        for i, fila in enumerate(tabla_container.find('tbody').find_all('tr')):
-            nombre_equipo_tag = fila.find('span', class_='nombre-equipo')
-            puntos_tag = fila.find('td', class_='destacado')
-            posicion_tag = fila.find('span', class_='pos')
+        # 2. Iteramos por cada fila <tr> en el <tbody>
+        for fila in tabla_container.find('tbody').find_all('tr'):
             
-            if nombre_equipo_tag and puntos_tag and posicion_tag:
-                posicion = posicion_tag.text.strip()
-                equipo = nombre_equipo_tag.text.strip()
-                puntos = puntos_tag.text.strip()
-                tabla_de_datos.append([posicion, equipo, puntos])
+            # La Posición y el Equipo están en el 'th' (header de la fila)
+            th_tag = fila.find('th', scope='row')
+            
+            # Los Puntos están en el primer 'td' (celda de datos)
+            # Buscamos la celda que es 'col col1' y tiene la clase '--bd' (bold)
+            puntos_tag = fila.find('td', class_='--bd')
 
-    except AttributeError:
-        print("Error: Se cargó la página, pero no se pudo encontrar la estructura de la tabla esperada.")
+            if th_tag and puntos_tag:
+                # 3. Extraemos la posición
+                posicion_tag = th_tag.find('span', class_='a_tb_ps')
+                
+                # 4. Extraemos el nombre del equipo
+                # (usamos '_hidden-xs' que es el nombre largo)
+                nombre_equipo_tag = th_tag.find('span', class_='_hidden-xs')
+                
+                # Fallback por si no encuentra el nombre largo, usa la abreviatura
+                if not nombre_equipo_tag:
+                    nombre_equipo_tag = th_tag.find('abbr')
+
+                if nombre_equipo_tag and posicion_tag:
+                    posicion = posicion_tag.text.strip()
+                    equipo = nombre_equipo_tag.text.strip()
+                    puntos = puntos_tag.text.strip()
+                    tabla_de_datos.append([posicion, equipo, puntos])
+
+    except AttributeError as e:
+        print(f"Error: Se cargó la página, pero no se pudo encontrar la estructura de la tabla esperada: {e}")
         sys.exit()
 
-    # --- Guardado e impresión ---
+    # --- (Tu lógica de guardado e impresión se mantiene igual) ---
     filename = "tabla_as_com.csv"
     try:
         with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
