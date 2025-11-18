@@ -1,57 +1,38 @@
 // src/handlers/ai.handler.js
 "use strict";
 
-// Esta es nuestra "base de conocimiento". Mapea palabras clave a comandos.
-const commandKnowledgeBase = [
-    { keywords: ['valores', 'dolar', 'uf', 'economia', 'finanzas'], command: '!valores' },
-    { keywords: ['clima', 'tiempo', 'temperatura'], command: '!clima [ciudad]' },
-    { keywords: ['feriado', 'festivo'], command: '!feriados' },
-    { keywords: ['farmacia', 'remedios'], command: '!far [comuna]' },
-    { keywords: ['tabla', 'posiciones', 'liga'], command: '!tabla' },
-    { keywords: ['partidos', 'fecha', 'futbol'], command: '!prox' },
-    { keywords: ['seleccion', 'chilena', 'clasificatorias'], command: '!tclasi o !clasi' },
-    { keywords: ['metro', 'subterraneo'], command: '!metro' },
-    { keywords: ['patente', 'auto', 'vehiculo'], command: '!pat [patente]' },
-    { keywords: ['sticker', 'stiker', 's'], command: '!s' },
-    { keywords: ['audio', 'sonido', 'ruido'], command: '!audios' },
-    { keywords: ['sismo', 'temblor'], command: '!sismos' },
-    { keywords: ['micro', 'paradero', 'bus'], command: '!bus [código]' },
-    { keywords: ['luz', 'corte', 'sec'], command: '!sec [región]' },
-    { keywords: ['ticket', 'tarea', 'recordatorio'], command: '!ticket' },
-    { keywords: ['caso', 'aislado', 'incidente'], command: '!caso' },
-    { keywords: ['ping', 'estado', 'sistema'], command: '!ping' },
-    { keywords: ['menu', 'ayuda', 'comandos'], command: '!menu' },
-    { keywords: ['buscar numero', 'telefono', 'celular'], command: '!num [numero]' },
-    { keywords: ['whois', 'dominio', 'ip', 'net'], command: '!whois [dominio]' }
-];
+// --- ¡NUEVO! Importamos el servicio de IA ---
+const { findCommandWithAI } = require('../services/ai.service');
+
+// --- ¡NUEVO! Cooldown para la IA ---
+let lastAiRequestTimestamp = 0;
+const AI_COOLDOWN_SECONDS = 7; // 7 segundos de espera
 
 async function handleAiHelp(message) {
     const userQuery = message.body.substring(message.body.indexOf(' ') + 1).toLowerCase().trim();
 
-    if (!userQuery || userQuery === 'ayuda') {
-        return "¡Wena wn! Soy Botillero. Dime qué necesitas hacer y te ayudaré a encontrar el comando correcto. 🤖 Por ejemplo: `!ayuda quiero saber el clima en valparaíso`";
+    if (!userQuery || userQuery === 'ayuda' || userQuery === 'help') {
+        return "¡Wena compa! Soy Botillero. Dime qué necesitas hacer y te ayudaré a encontrar el comando correcto. 🤖\n\nPor ejemplo: `!ayuda quiero saber el clima en valparaíso`";
     }
 
-    // Buscamos una coincidencia en nuestra base de conocimiento
-    for (const entry of commandKnowledgeBase) {
-        for (const keyword of entry.keywords) {
-            if (userQuery.includes(keyword)) {
-                // ¡Encontramos una coincidencia!
-                const response = `
-🤖 ¡Ya cache! Creo que este es el comando que buscas:
+    // --- ¡NUEVO! Verificación del cooldown ---
+    const now = Date.now();
+    const timeSinceLastRequest = (now - lastAiRequestTimestamp) / 1000;
 
-Para lo que necesitas, el comando correcto es:
-👉 *${entry.command}*
-
-Inténtalo y avísame , y si te sirve bakan, y si no, me importa hectareas de....
-                `.trim();
-                return response;
-            }
-        }
+    if (timeSinceLastRequest < AI_COOLDOWN_SECONDS) {
+        const timeLeft = Math.ceil(AI_COOLDOWN_SECONDS - timeSinceLastRequest);
+        return `⏳ Calma las pasiones, espera ${timeLeft} segundos antes de volver a intentarlo.`;
     }
 
-    // Si no encontramos ninguna coincidencia
-    return "Las Weas, no cacho qué comando podría ayudarte con eso. 🤔\n\nPrueba a ser más específico wn o escribe `!menu` para ver la lista completa de comandos.";
+    try {
+        // Llamamos a la IA para que nos dé la respuesta
+        const aiResponse = await findCommandWithAI(userQuery);
+        lastAiRequestTimestamp = Date.now(); // Actualizamos el timestamp solo si la llamada fue exitosa
+        return aiResponse;
+    } catch (error) {
+        console.error("Error al contactar la IA de Google:", error);
+        return "Tuve un problema para conectarme con la IA, compa. Intenta de nuevo más tarde.";
+    }
 }
 
 module.exports = {

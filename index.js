@@ -1,6 +1,10 @@
 // index.js (VERSIÓN FINAL DE PRODUCCIÓN)
 "use strict";
 
+// --- ¡IMPORTANTE! Carga las variables de entorno desde .env ---
+// Debe ser la primera línea para que las variables estén disponibles en todo el proyecto.
+require('dotenv').config();
+
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const commandHandler = require('./src/handlers/command.handler');

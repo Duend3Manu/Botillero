@@ -59,18 +59,17 @@ def obtener_estado_transbank():
 
 def main():
     """Función principal para obtener y mostrar el estado de los servicios."""
-    print("Obteniendo estado de Transbank Developers...")
-    print("---------------------------------------")
-    
     estados = obtener_estado_transbank()
     
+    # Importamos json aquí para usarlo en la salida
+    import json
+
     if estados:
-        for servicio, estado in estados.items():
-            # Usamos .get() para obtener el emoji, con "❓" como valor por defecto
-            emoji = EMOJIS.get(estado, "❓")
-            print(f"{emoji} {servicio}: {estado}")
+        # Imprime el diccionario de estados directamente como un string JSON
+        print(json.dumps(estados))
     else:
-        print("❌ No se pudo obtener el estado de Transbank en este momento.")
+        # Si hay un error, imprime un objeto JSON de error
+        print(json.dumps({"error": "No se pudo obtener el estado de Transbank en este momento."}))
 
 if __name__ == "__main__":
     main()

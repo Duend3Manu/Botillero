@@ -5,7 +5,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const SCRIPTS_PATH = path.join(__dirname, '..', '..', 'scripts', 'python');
-const PYTHON_EXECUTABLE = 'python';
+const PYTHON_EXECUTABLE = 'py';
 
 function addTextToImage(imagePath, topText, bottomText) {
     return new Promise((resolve, reject) => {

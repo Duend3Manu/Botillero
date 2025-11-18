@@ -13,6 +13,7 @@ const externalService = require('../services/external.service');;
 // Forma correcta y limpia de importar las funciones que necesitamos
 const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require('../services/league.service.js');
 
+const { getTransbankStatus } = require('../services/transbank.service.js');
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');
 const { handleFeriados, handleFarmacias, handleClima, handleSismos, handleBus, handleSec, handleMenu } = require('./utility.handler');
@@ -27,6 +28,11 @@ const { handleReaction } = require('../services/messaging.service');
 const soundCommands = getSoundCommands();
 const countdownCommands = ['18', 'navidad', 'añonuevo'];
 
+// --- Cooldowns para comandos específicos ---
+let lastTransbankRequestTimestamp = 0;
+const TRANSBANK_COOLDOWN_SECONDS = 30; // 30 segundos de espera para !transbank
+
+
 // --- ¡NUEVO! Lista de todos los comandos válidos ---
 const validCommands = new Set([
     ...soundCommands, ...countdownCommands,
@@ -35,9 +41,10 @@ const validCommands = new Set([
     'horoscopo', 'bencina', 'trstatus', 'bolsa', 'ping', 'feriados',
     'far', 'clima', 'sismos', 'bus', 'sec', 'secrm', 'menu', 'comandos',
     'wiki', 'noticias', 'g', 'pat', 'patente', 's', 'audios', 'sonidos',
-    'chiste', 'ticket', 'ticketr', 'tickete', 'caso', 'ecaso', 'icaso',
+    'chiste', 'ticket', 'ticketr', 'tickete', 'caso', 'ecaso', 'icaso', 'transbank',
     'ayuda', 'num', 'tel', 'tne', 'pase', 'whois', 'net', 'nic', 'id'
-]);
+    , 'toimg' // <--- ¡NUEVO COMANDO!
+]); 
 
 async function commandHandler(client, message) {
     const body = message.body.trim(); // Usamos el cuerpo original sin convertir a minúsculas todavía.
@@ -132,6 +139,18 @@ async function commandHandler(client, message) {
                 case 'bolsa':
                     replyMessage = await externalService.getBolsaData();
                     break;
+                case 'transbank':
+                    const now = Date.now();
+                    const timeSinceLastRequest = (now - lastTransbankRequestTimestamp) / 1000;
+
+                    if (timeSinceLastRequest < TRANSBANK_COOLDOWN_SECONDS) {
+                        const timeLeft = Math.ceil(TRANSBANK_COOLDOWN_SECONDS - timeSinceLastRequest);
+                        replyMessage = `⏳ El comando !transbank está en cooldown. Por favor, espera ${timeLeft} segundos.`;
+                    } else {
+                        replyMessage = await getTransbankStatus();
+                        lastTransbankRequestTimestamp = Date.now(); // Actualizamos el timestamp
+                    }
+                    break;
                 case 'ping': replyMessage = await handlePing(message); break;
                 case 'feriados': replyMessage = await handleFeriados(); break;
                 case 'far': replyMessage = await handleFarmacias(message); break;
@@ -157,6 +176,22 @@ async function commandHandler(client, message) {
                 case 'id':
                     console.log('ID de este chat:', message.from);
                     message.reply(`ℹ️ El ID de este chat es:\n${message.from}`);
+                    break;
+                case 'toimg':
+                    if (!message.hasQuotedMsg) {
+                        replyMessage = 'Debes responder a un sticker para convertirlo en imagen.';
+                        break;
+                    }
+                    const quotedMsg = await message.getQuotedMessage();
+                    if (quotedMsg.hasMedia && quotedMsg.type === 'sticker') {
+                        const stickerMedia = await quotedMsg.downloadMedia();
+                        // Al enviar el 'media' sin opciones de sticker, se envía como imagen/video.
+                        await client.sendMessage(message.from, stickerMedia, { 
+                            caption: '¡Listo! Aquí tienes tu sticker como imagen. ✨' 
+                        });
+                    } else {
+                        replyMessage = 'El mensaje al que respondiste no es un sticker.';
+                    }
                     break;
                 default: break;
             }
