@@ -45,10 +45,13 @@ async function getHoroscope(signo) {
 
     try {
         console.log(`(Servicio Horóscopo) -> Ejecutando ${scriptName} para el signo ${signoLimpio}...`);
-        const horoscopeData = await pythonService.executeScript(scriptName, [signoLimpio]);
+        const result = await pythonService.executeScript(scriptName, [signoLimpio]);
+        if (result.code !== 0) {
+            throw new Error(result.stderr || 'Error al ejecutar script de horóscopo');
+        }
         const imagePath = findImagePath(signoLimpio);
         
-        return { text: horoscopeData, imagePath: imagePath };
+        return { text: result.stdout, imagePath: imagePath };
 
     } catch (error) {
         console.error(`Error en getHoroscope para ${signo}:`, error.message);
