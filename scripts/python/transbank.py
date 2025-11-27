@@ -89,36 +89,44 @@ def get_transbank_status():
         return {'error': f'Error: {str(e)}'}, False
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--json', action='store_true', help='Output en formato JSON')
-    args = parser.parse_args()
+    try:
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--json', action='store_true', help='Output en formato JSON')
+        args = parser.parse_args()
 
-    data, from_cache = get_transbank_status()
-    
-    # Estructura de respuesta estandarizada
-    response = {
-        'success': 'error' not in data,
-        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-        'from_cache': from_cache,
-        'data': data
-    }
-
-    if args.json:
-        print(json.dumps(response, ensure_ascii=False, indent=2))
-    else:
-        # Formato texto para WhatsApp (sin caracteres problemáticos)
-        output = "*Estado de Servicios Transbank*\n\n"
+        data, from_cache = get_transbank_status()
         
-        if 'error' in data:
-            output += f"Error: {data['error']}"
+        # Estructura de respuesta estandarizada
+        response = {
+            'success': 'error' not in data,
+            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'from_cache': from_cache,
+            'data': data
+        }
+
+        if args.json:
+            print(json.dumps(response, ensure_ascii=False, indent=2))
         else:
-            for service, status in data.items():
-                status_indicator = "OK" if status == "Operational" else "PROBLEMAS"
-                output += f"{service}: {status_indicator}\n"
+            # Formato texto para WhatsApp (sin caracteres problemáticos)
+            output = "*Estado de Servicios Transbank*\n\n"
             
-            output += f"\nActualizado: {response['timestamp']}"
-        
-        print(output)
+            if 'error' in data:
+                output += f"Error: {data['error']}"
+            else:
+                if not data:
+                    output += "No hay servicios listados o no se pudo conectar.\n"
+                else:
+                    for service, status in data.items():
+                        status_indicator = "OK" if status == "Operational" else "PROBLEMAS"
+                        output += f"{service}: {status_indicator}\n"
+                
+                output += f"\nActualizado: {response['timestamp']}"
+            
+            print(output)
+            sys.stdout.flush()
+    except Exception as e:
+        print(f"Error en main: {str(e)}")
+        sys.stdout.flush()
 
 if __name__ == '__main__':
     main()

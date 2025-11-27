@@ -10,6 +10,7 @@
  * - Saltos de línea (\n)
  * - Formato Markdown básico (*_`)
  * - Caracteres ASCII estándar
+ * - Caracteres acentuados latinos (á, é, í, ó, ú, etc)
  * 
  * @param {string} message - El mensaje a sanitizar
  * @returns {string} Mensaje sanitizado
@@ -19,9 +20,10 @@ function sanitizeForWhatsApp(message) {
         return '';
     }
 
-    // Remover caracteres problemáticos, mantener ASCII + \n + markdown
+    // Remover caracteres problemáticos, mantener ASCII + acentos latinos + \n + markdown
+    // \u0080-\u00FF incluye caracteres acentuados latinos (á, é, í, ó, ú, ñ, etc)
     return message
-        .replace(/[^\x00-\x7F\n*_`]/g, '') // Solo ASCII, saltos de línea y markdown
+        .replace(/[^\x00-\x7F\u0080-\u00FF\n*_`]/g, '') // ASCII + acentos latinos + saltos + markdown
         .replace(/\u0000/g, '') // Remover null bytes
         .trim();
 }

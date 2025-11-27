@@ -10,12 +10,13 @@ async function getBencinaData(comuna) {
     }
     try {
         console.log(`(Servicio Externo) -> Ejecutando bencina.py para ${comuna}...`);
-        let bencinaData = await pythonService.executeScript('bencina.py', [comuna]);
+        const result = await pythonService.executeScript('bencina.py', [comuna]);
         
         // Sanitizar para WhatsApp
-        bencinaData = cleanPythonOutput(bencinaData);
+        let bencinaData = cleanPythonOutput(result.stdout);
         
         if (!bencinaData) {
+            console.error(`bencina.py stderr: ${result.stderr}`);
             return `No se encontraron datos de bencina para "${comuna}".`;
         }
         
@@ -29,10 +30,15 @@ async function getBencinaData(comuna) {
 async function getTraductorStatus() {
     try {
         console.log(`(Servicio Externo) -> Ejecutando transbank.py...`);
-        let statusData = await pythonService.executeScript('transbank.py');
+        const result = await pythonService.executeScript('transbank.py');
+        
+        console.log(`(Servicio Externo) -> transbank.py stdout: "${result.stdout}"`);
+        if (result.stderr) {
+            console.log(`(Servicio Externo) -> transbank.py stderr: "${result.stderr}"`);
+        }
         
         // Sanitizar para WhatsApp
-        statusData = cleanPythonOutput(statusData);
+        let statusData = cleanPythonOutput(result.stdout);
         
         if (!statusData) {
             return "No se pudo procesar la información de Transbank.";
@@ -48,12 +54,13 @@ async function getTraductorStatus() {
 async function getBolsaData() {
     try {
         console.log(`(Servicio Externo) -> Ejecutando bolsa.py...`);
-        let bolsaData = await pythonService.executeScript('bolsa.py');
+        const result = await pythonService.executeScript('bolsa.py');
         
         // Sanitizar para WhatsApp
-        bolsaData = cleanPythonOutput(bolsaData);
+        let bolsaData = cleanPythonOutput(result.stdout);
         
         if (!bolsaData) {
+            console.error(`bolsa.py stderr: ${result.stderr}`);
             return "No se pudieron obtener los datos de la bolsa.";
         }
         
