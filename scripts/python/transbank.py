@@ -106,18 +106,19 @@ def main():
     if args.json:
         print(json.dumps(response, ensure_ascii=False, indent=2))
     else:
-        # Formato texto para WhatsApp
-        print("💳 *Estado de Servicios Transbank* 💳\n")
+        # Formato texto para WhatsApp (sin caracteres problemáticos)
+        output = "*Estado de Servicios Transbank*\n\n"
         
         if 'error' in data:
-            print(f"❌ Error: {data['error']}")
+            output += f"Error: {data['error']}"
         else:
             for service, status in data.items():
-                emoji = "✅" if status == "Operational" else "❌"
-                # Traducir estado si es necesario o dejarlo en inglés como pidió el usuario ("perational")
-                print(f"{emoji} {service}: {status}")
+                status_indicator = "OK" if status == "Operational" else "PROBLEMAS"
+                output += f"{service}: {status_indicator}\n"
             
-            print(f"\n_📅 Actualizado: {response['timestamp']}_")
+            output += f"\nActualizado: {response['timestamp']}"
+        
+        print(output)
 
 if __name__ == '__main__':
     main()

@@ -2,6 +2,7 @@
 "use strict";
 
 const pythonService = require('./python.service');
+const { cleanPythonOutput } = require('../utils/sanitizer.util');
 
 async function getBencinaData(comuna) {
     if (!comuna) {
@@ -9,7 +10,15 @@ async function getBencinaData(comuna) {
     }
     try {
         console.log(`(Servicio Externo) -> Ejecutando bencina.py para ${comuna}...`);
-        const bencinaData = await pythonService.executeScript('bencina.py', [comuna]);
+        let bencinaData = await pythonService.executeScript('bencina.py', [comuna]);
+        
+        // Sanitizar para WhatsApp
+        bencinaData = cleanPythonOutput(bencinaData);
+        
+        if (!bencinaData) {
+            return `No se encontraron datos de bencina para "${comuna}".`;
+        }
+        
         return bencinaData;
     } catch (error) {
         console.error("Error en getBencinaData:", error.message);
@@ -20,7 +29,15 @@ async function getBencinaData(comuna) {
 async function getTraductorStatus() {
     try {
         console.log(`(Servicio Externo) -> Ejecutando transbank.py...`);
-        const statusData = await pythonService.executeScript('transbank.py');
+        let statusData = await pythonService.executeScript('transbank.py');
+        
+        // Sanitizar para WhatsApp
+        statusData = cleanPythonOutput(statusData);
+        
+        if (!statusData) {
+            return "No se pudo procesar la información de Transbank.";
+        }
+        
         return statusData;
     } catch (error) {
         console.error("Error en getTraductorStatus:", error.message);
@@ -31,7 +48,15 @@ async function getTraductorStatus() {
 async function getBolsaData() {
     try {
         console.log(`(Servicio Externo) -> Ejecutando bolsa.py...`);
-        const bolsaData = await pythonService.executeScript('bolsa.py');
+        let bolsaData = await pythonService.executeScript('bolsa.py');
+        
+        // Sanitizar para WhatsApp
+        bolsaData = cleanPythonOutput(bolsaData);
+        
+        if (!bolsaData) {
+            return "No se pudieron obtener los datos de la bolsa.";
+        }
+        
         return bolsaData;
     } catch (error) {
         console.error("Error en getBolsaData:", error.message);
