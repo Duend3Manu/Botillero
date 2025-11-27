@@ -1,6 +1,7 @@
 {
   "type": "commonjs",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "axios": "^1.12.2",
     "cheerio": "^1.1.2",
     "dotenv": "^17.2.3",
@@ -13,7 +14,7 @@
     "qrcode-terminal": "^0.12.0",
     "sqlite3": "^5.1.7",
     "systeminformation": "^5.27.11",
-    "whatsapp-web.js": "^1.34.1",
+    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main",
     "whois": "^2.0.5"
   }
 }

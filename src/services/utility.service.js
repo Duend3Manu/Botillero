@@ -32,18 +32,15 @@ async function getFeriados() {
 async function getRandomInfo() {
     const result = await executePythonScript('random_info.py');
     
-    // --- NUEVOS INFORMANTES ---
-    console.log("[DEBUG utility.service] Salida cruda de Python:", result);
-    
     try {
-        // Intentamos parsear como JSON.
+        // El script de Python ahora SIEMPRE devuelve un JSON string.
         const parsedJson = JSON.parse(result);
-        console.log("[DEBUG utility.service] El parseo a JSON fue exitoso.");
         return parsedJson;
     } catch (e) {
-        console.log("[DEBUG utility.service] No es un JSON, se devolverá como texto plano.");
-        // Si no es JSON, es un mensaje de texto normal.
-        return result;
+        console.error("[ERROR utility.service] Falló el parseo del JSON de random_info.py:", e);
+        console.error("Salida recibida:", result);
+        // Fallback de emergencia
+        return { type: 'text', caption: '⚠️ Error interno al procesar el dato aleatorio.' };
     }
 }
 

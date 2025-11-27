@@ -1,49 +1,29 @@
 // src/services/transbank.service.js
 "use strict";
 
-const { spawn } = require('child_process');
-const path = require('path');
-const { explainTransbankStatusWithAI } = require('./ai.service');
+const pythonService = require('./python.service');
 
-const PYTHON_EXECUTABLE = 'py';
-const SCRIPT_PATH = path.join(__dirname, '..', '..', 'scripts', 'python', 'transbank.py');
+const TRANSBANK_SCRIPT = 'transbank.py';
 
 async function getTransbankStatus() {
-    return new Promise((resolve, reject) => {
-        const pythonProcess = spawn(PYTHON_EXECUTABLE, ['-u', SCRIPT_PATH]);
+    try {
+        // Ejecutar script Python usando el servicio unificado
+        const result = await pythonService.executeScript(TRANSBANK_SCRIPT);
+        
+        // El script ahora devuelve texto formateado por defecto
+        // Si hay error técnico en la ejecución (exit code != 0)
+        if (result.code !== 0) {
+            console.error('Error ejecutando transbank.py:', result.stderr);
+            return '⚠️ Hubo un error técnico al consultar Transbank.';
+        }
 
-        let rawData = '';
-        let errorData = '';
+        // Devolver directamente la salida formateada del script
+        return result.stdout;
 
-        pythonProcess.stdout.on('data', (data) => { rawData += data.toString(); });
-        pythonProcess.stderr.on('data', (data) => { errorData += data.toString(); });
-
-        pythonProcess.on('close', async (code) => {
-            if (code !== 0) {
-                console.error(`Error en transbank.py: ${errorData}`);
-                return reject(new Error('Falló el script de Python para Transbank.'));
-            }
-
-            try {
-                const statusData = JSON.parse(rawData);
-                if (statusData.error) {
-                    return resolve(statusData.error);
-                }
-
-                const failingServices = Object.entries(statusData)
-                    .filter(([service, status]) => status !== 'Operational');
-
-                if (failingServices.length === 0) {
-                    resolve('✅ ¡Wena! Todos los servicios de Transbank están operativos.');
-                } else {
-                    const explanation = await explainTransbankStatusWithAI(Object.fromEntries(failingServices));
-                    resolve(explanation);
-                }
-            } catch (parseError) {
-                reject(new Error('No se pudo interpretar la respuesta del script de Transbank.'));
-            }
-        });
-    });
+    } catch (error) {
+        console.error('Error en servicio Transbank:', error);
+        return '⚠️ Ocurrió un error al consultar el estado de Transbank.';
+    }
 }
 
 module.exports = { getTransbankStatus };

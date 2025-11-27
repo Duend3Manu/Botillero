@@ -6,6 +6,7 @@ const moment = require('moment-timezone');
 const puppeteer = require('puppeteer');
 const config = require('../config');
 const { generateWhatsAppMessage } = require('../utils/secService');
+const { getRandomInfo } = require('../services/utility.service');
 
 async function handleFeriados() {
     try {
@@ -36,24 +37,43 @@ async function handleFarmacias(message) {
     }
 
     try {
+        console.log(`(Farmacias) -> Buscando farmacias en: "${city}"`);
+        
+        // Intenta obtener farmacias desde la API del Minsal
         const response = await axios.get('https://midas.minsal.cl/farmacia_v2/WS/getLocalesTurnos.php');
         const farmacias = response.data;
-        const filteredFarmacias = farmacias.filter(f => f.comuna_nombre.toLowerCase().includes(city));
+        
+        console.log(`(Farmacias) -> Total farmacias recibidas de API: ${farmacias.length}`);
+       
+        // Filtrar por comuna
+        const filteredFarmacias = farmacias.filter(f => 
+            f.comuna_nombre && f.comuna_nombre.toLowerCase().includes(city)
+        );
+        
+        console.log(`(Farmacias) -> Farmacias filtradas: ${filteredFarmacias.length}`);
 
-        if (filteredFarmacias.length === 0) {
-            return `No se encontraron farmacias de turno en ${city}.`;
+        if (filteredFarmacias.length > 0) {
+            // Encontró farmacias en la API
+            let replyMessage = `🏥 *Farmacias de turno en ${filteredFarmacias[0].comuna_nombre}*\n\n`;
+            filteredFarmacias.slice(0, 5).forEach(f => {
+                replyMessage += `*${f.local_nombre}*\n`;
+                replyMessage += `📍 ${f.local_direccion}\n`;
+                replyMessage += `🕐 ${f.funcionamiento_hora_apertura} - ${f.funcionamiento_hora_cierre}\n`;
+                if (f.local_telefono) replyMessage += `📞 ${f.local_telefono}\n`;
+                replyMessage += `\n`;
+            });
+            return replyMessage.trim();
         }
-
-        let replyMessage = `🏥 Farmacias de turno encontradas en *${city.charAt(0).toUpperCase() + city.slice(1)}*:\n\n`;
-        filteredFarmacias.slice(0, 5).forEach(f => {
-            replyMessage += `*${f.local_nombre}*\n`;
-            replyMessage += `Dirección: ${f.local_direccion}\n`;
-            replyMessage += `Horario: ${f.funcionamiento_hora_apertura} a ${f.funcionamiento_hora_cierre}\n\n`;
-        });
-        return replyMessage.trim();
+        
+        // No encontró en API, ofrecer alternativas
+        const comunasDisponibles = [...new Set(farmacias.map(f => f.comuna_nombre))];
+        const algunasComunas = comunasDisponibles.slice(0, 8).join(', ');
+        
+        return `❌ No encontré farmacias de turno para "${city}" en la base de datos actual.\n\n💡 **Comunas disponibles en la API:**\n${algunasComunas}\n\n🌐 **Para otras comunas de Chile:**\nConsulta el sitio oficial del Minsal:\nhttps://seremienlinea.minsal.cl/asdigital/index.php?mfarmacias`;
+        
     } catch (error) {
-        console.error('Error al obtener las farmacias:', error.message);
-        return 'Ocurrió un error al obtener las farmacias.';
+        console.error('(Farmacias) -> Error:', error.message);
+        return '❌ No pude obtener información de farmacias en este momento.\n\n🌐 Puedes consultar directamente en:\nhttps://seremienlinea.minsal.cl/asdigital/index.php?mfarmacias';
     }
 }
 
@@ -180,6 +200,15 @@ async function handleSec(message) {
     return generateWhatsAppMessage(region);
 }
 
+async function handleRandom() {
+    try {
+        return await getRandomInfo();
+    } catch (error) {
+        console.error('Error al obtener dato random:', error);
+        return '🎲 Hubo un error al lanzar los dados de la información.';
+    }
+}
+
 // --- Lógica para !menu (CORREGIDA) ---
 function handleMenu() {
     return `
@@ -205,6 +234,7 @@ function handleMenu() {
   \`!pat [patente]\` - Info de un vehículo.
   \`!num [número]\` - Busca info de un teléfono.
   \`!tne [rut]\` - Consulta el estado de la TNE.
+  \`!random\` - Dato curioso, efeméride, chiste, etc.
 
 *📡 Redes y Dominios*
   \`!whois [dominio/ip]\` - Realiza un Whois.
@@ -242,5 +272,6 @@ module.exports = {
     handleSismos,
     handleBus,
     handleSec,
-    handleMenu
+    handleMenu,
+    handleRandom
 };

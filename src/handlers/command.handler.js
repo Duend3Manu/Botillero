@@ -16,7 +16,7 @@ const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require
 const { getTransbankStatus } = require('../services/transbank.service.js');
 // --- Importaciones de Manejadores (Handlers) ---
 const { handlePing } = require('./system.handler');
-const { handleFeriados, handleFarmacias, handleClima, handleSismos, handleBus, handleSec, handleMenu } = require('./utility.handler');
+const { handleFeriados, handleFarmacias, handleClima, handleSismos, handleBus, handleSec, handleMenu, handleRandom } = require('./utility.handler');
 const { handleSticker, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce } = require('./fun.handler');
 const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler'); // Corregido: handleGoogleSearch no estaba en tu lista original pero sí en el switch
 const { handleTicket, handleCaso } = require('./stateful.handler');
@@ -42,7 +42,8 @@ const validCommands = new Set([
     'far', 'clima', 'sismos', 'bus', 'sec', 'secrm', 'menu', 'comandos',
     'wiki', 'noticias', 'g', 'pat', 'patente', 's', 'audios', 'sonidos',
     'chiste', 'ticket', 'ticketr', 'tickete', 'caso', 'ecaso', 'icaso', 'transbank',
-    'ayuda', 'num', 'tel', 'tne', 'pase', 'whois', 'net', 'nic', 'id'
+    'ayuda', 'num', 'tel', 'tne', 'pase', 'whois', 'net', 'nic', 'id',
+    'random', 'dato', 'curiosidad' // <--- ¡NUEVOS COMANDOS!
     , 'toimg' // <--- ¡NUEVO COMANDO!
 ]); 
 
@@ -110,8 +111,8 @@ async function commandHandler(client, message) {
                     replyMessage = await getMatchDaySummary();
                     break;
                 case 'metro':
-                    const metroStatus = await metroService.getMetroStatus();
-                    replyMessage = `🚇 *Estado del Metro de Santiago*\n\n${metroStatus}`;
+                    // El servicio ya devuelve el mensaje completo con formato
+                    replyMessage = await metroService.getMetroStatus();
                     break;
                 case 'tclasi': case 'selecciontabla': replyMessage = await nationalTeamService.getQualifiersTable(); break;
                 case 'clasi': case 'seleccionpartidos': replyMessage = await nationalTeamService.getQualifiersMatches(); break;
@@ -176,6 +177,20 @@ async function commandHandler(client, message) {
                 case 'id':
                     console.log('ID de este chat:', message.from);
                     message.reply(`ℹ️ El ID de este chat es:\n${message.from}`);
+                    break;
+                case 'random': case 'dato': case 'curiosidad': 
+                    const randomData = await handleRandom();
+                    if (randomData.type === 'image' && randomData.media_url) {
+                        try {
+                            const media = await MessageMedia.fromUrl(randomData.media_url);
+                            await client.sendMessage(message.from, media, { caption: randomData.caption });
+                        } catch (err) {
+                            console.error("Error al enviar imagen random:", err);
+                            await message.reply(randomData.caption + "\n\n(No pude cargar la imagen 😢)");
+                        }
+                    } else {
+                        replyMessage = randomData.caption;
+                    }
                     break;
                 case 'toimg':
                     if (!message.hasQuotedMsg) {

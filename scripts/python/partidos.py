@@ -1,4 +1,4 @@
-# partidos.py (Versión con filtro de equipos chilenos corregido)
+# partidos.py
 import requests
 from datetime import datetime, timedelta
 import sys
@@ -21,23 +21,14 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 # Diccionario de ligas
 LIGAS = {
     "🏆 Liga Chilena": "chi.1",
-    "🇨🇱 Copa Chile": "chi.copa_chi",
-    "🌎 Copa Sudamericana": "conmebol.sudamericana"
+    "🇨🇱 Copa Chile": "chi.copa_chi"
 }
-
-# Lista de equipos chilenos para filtrar en competencias internacionales
-EQUIPOS_CHILENOS = [
-    "Universidad de Chile", "Colo-Colo", "Universidad Católica", "Palestino",
-    "Unión Española", "Audax Italiano", "Huachipato", "Everton", "Coquimbo Unido",
-    "Cobresal", "O'Higgins"
-]
 
 ZONA_HORARIA_CHILE = ZoneInfo('America/Santiago')
 
-def obtener_y_formatear_partidos(codigo_liga, fecha, filtrar_chilenos=False):
+def obtener_y_formatear_partidos(codigo_liga, fecha):
     """
     Obtiene los partidos de una liga para una fecha específica.
-    Si 'filtrar_chilenos' es True, solo devuelve partidos de equipos chilenos.
     """
     url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{codigo_liga}/scoreboard?dates={fecha.strftime('%Y%m%d')}"
     try:
@@ -53,11 +44,6 @@ def obtener_y_formatear_partidos(codigo_liga, fecha, filtrar_chilenos=False):
             equipos_data = evento["competitions"][0]["competitors"]
             equipo_local = equipos_data[0]["team"]["displayName"]
             equipo_visitante = equipos_data[1]["team"]["displayName"]
-
-            # --- LÓGICA DE FILTRADO MEJORADA ---
-            # Si se activa el filtro, y ninguno de los dos equipos es chileno, saltamos al siguiente partido.
-            if filtrar_chilenos and (equipo_local not in EQUIPOS_CHILENOS and equipo_visitante not in EQUIPOS_CHILENOS):
-                continue
 
             estado_detalle = evento["status"]["type"]["shortDetail"]
             estado_tipo = evento["status"]["type"]["state"]
@@ -80,22 +66,19 @@ def main():
     for nombre_liga, codigo in LIGAS.items():
         print(f"\n*{nombre_liga}*")
         
-        es_internacional = "Sudamericana" in nombre_liga
-        
-        partidos_de_hoy = obtener_y_formatear_partidos(codigo, fecha_hoy, filtrar_chilenos=es_internacional)
+        partidos_de_hoy = obtener_y_formatear_partidos(codigo, fecha_hoy)
 
         if partidos_de_hoy:
             print(f"📅 Partidos para hoy, {fecha_hoy.strftime('%d-%m-%Y')}:")
             for partido in partidos_de_hoy:
                 print(partido)
         else:
-            if not es_internacional:
-                print(f"🚫 No hay partidos programados para hoy.")
+            print(f"🚫 No hay partidos programados para hoy.")
 
             encontrado_futuro = False
             for i in range(1, 8):
                 fecha_futura = fecha_hoy + timedelta(days=i)
-                partidos_futuros = obtener_y_formatear_partidos(codigo, fecha_futura, filtrar_chilenos=es_internacional)
+                partidos_futuros = obtener_y_formatear_partidos(codigo, fecha_futura)
 
                 if partidos_futuros:
                     print(f"📅 Próxima fecha: {fecha_futura.strftime('%A, %d de %B').capitalize()}")
@@ -105,10 +88,7 @@ def main():
                     break
             
             if not encontrado_futuro:
-                if es_internacional:
-                    print(f"🚫 _Ningún equipo chileno tiene partidos en los próximos 7 días en esta competencia._")
-                else:
-                    print("🚫 _No se encontraron partidos en los próximos 7 días._")
+                print("🚫 _No se encontraron partidos en los próximos 7 días._")
 
 if __name__ == "__main__":
     main()

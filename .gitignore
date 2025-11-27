@@ -3,3 +3,4 @@ node_modules/
 .wwebjs_auth/
 .wwebjs_auth/session
 .wwebjs_cache/
+messages.db

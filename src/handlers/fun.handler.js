@@ -10,6 +10,8 @@ const { MessageMedia } = require('whatsapp-web.js');
 // --- Lógica para Stickers ---
 async function handleSticker(client, message) {
     let mediaMessage = message;
+    
+    // Si el mensaje cita otro mensaje, intentar obtener el mensaje citado
     if (message.hasQuotedMsg) {
         const quotedMsg = await message.getQuotedMessage();
         if (quotedMsg.hasMedia) {
@@ -17,19 +19,31 @@ async function handleSticker(client, message) {
         }
     }
 
-    if (mediaMessage.hasMedia && (mediaMessage.type === 'image' || mediaMessage.type === 'video' || mediaMessage.type === 'gif')) {
+    // Verificar si tiene media
+    if (mediaMessage.hasMedia) {
+        // Log para diagnóstico
+        console.log(`(Sticker) -> Tipo de mensaje: ${mediaMessage.type}`);
+        
+        // Validación del tipo de mensaje
+        const validTypes = ['image', 'video', 'gif'];
+        if (!validTypes.includes(mediaMessage.type)) {
+            return message.reply("❌ Solo puedo crear stickers desde imágenes, videos o GIFs.");
+        }
+
         try {
-            // --- ¡NUEVA LÓGICA DE REINTENTOS! ---
-            // A veces, el archivo no está listo para descargar de inmediato.
+            // Descargar media con reintentos
             let media = null;
             const maxRetries = 3;
-            const retryDelay = 1500; // 1.5 segundos
+            const retryDelay = 1500;
 
             for (let i = 0; i < maxRetries; i++) {
                 try {
                     console.log(`(Sticker) -> Intentando descargar media (Intento ${i + 1}/${maxRetries})...`);
                     media = await mediaMessage.downloadMedia();
-                    if (media) break; // Si la descarga es exitosa, salimos del bucle.
+                    if (media) {
+                        console.log(`(Sticker) -> Media descargado exitosamente. Mimetype: ${media.mimetype}`);
+                        break;
+                    }
                 } catch (downloadError) {
                     console.warn(`(Sticker) -> Falló el intento ${i + 1}: ${downloadError.message}`);
                     if (i < maxRetries - 1) {
@@ -38,43 +52,27 @@ async function handleSticker(client, message) {
                 }
             }
 
-            // Verificamos si la descarga del archivo multimedia fue exitosa después de los reintentos.
             if (!media) {
-                return message.reply("❌ No se pudo descargar el archivo para crear el sticker. Intenta con un archivo más reciente.");
+                return message.reply("❌ No se pudo descargar el archivo para crear el sticker. Intenta con un archivo más reciente o envía el archivo directamente (no reenviado).");
             }
 
-            if (media.mimetype.startsWith('video') || media.mimetype.startsWith('image/gif')) {
-                // Es un video o GIF, necesita conversión a webp animado.
-                const tempInputPath = path.join(__dirname, '..', '..', 'temp', `sticker_in_${Date.now()}.tmp`);
-                const tempOutputPath = path.join(__dirname, '..', '..', 'temp', `sticker_out_${Date.now()}.webp`);
+            // Crear sticker con metadatos
+            const metadata = {
+                sendMediaAsSticker: true,
+                stickerAuthor: "Botillero",
+                stickerName: "Creado con Botillero"
+            };
 
-                fs.writeFileSync(tempInputPath, Buffer.from(media.data, 'base64'));
+            console.log(`(Sticker) -> Enviando sticker...`);
+            await message.reply(media, undefined, metadata);
+            console.log(`(Sticker) -> Sticker enviado exitosamente.`);
 
-                await new Promise((resolve, reject) => {
-                    ffmpeg(tempInputPath)
-                        .outputOptions(['-vcodec libwebp', '-vf scale=512:512:force_original_aspect_ratio=decrease,fps=15,pad=512:512:-1:-1:color=white@0.0', '-loop 0', '-ss 00:00:00.0', '-t 00:00:05.0', '-an'])
-                        .save(tempOutputPath)
-                        .on('end', resolve)
-                        .on('error', reject)
-                        .run();
-                });
-
-                const stickerMedia = MessageMedia.fromFilePath(tempOutputPath);
-                await message.reply(stickerMedia, undefined, { sendMediaAsSticker: true, stickerAuthor: "Botillero" });
-
-                // Limpiamos los archivos temporales
-                fs.unlinkSync(tempInputPath);
-                fs.unlinkSync(tempOutputPath);
-            } else {
-                // Es una imagen estática, se envía directamente.
-                await message.reply(media, undefined, { sendMediaAsSticker: true, stickerAuthor: "Botillero", stickerName: "Creado con Botillero" });
-            }
         } catch (e) {
-            message.reply("Hubo un error al crear el sticker.");
-            console.error(e);
+            message.reply("❌ Hubo un error al crear el sticker.");
+            console.error("(Sticker) -> Error:", e);
         }
     } else {
-        message.reply("Responde a una imagen o video, o envía uno junto al comando `!s`.");
+        message.reply("📎 Responde a una imagen, video o GIF, o envía uno junto al comando `!s`.");
     }
 }
 
@@ -261,27 +259,62 @@ function obtenerFraseAleatoria() {
 
 async function handleBotMention(client, message) {
     try {
-        const contact = await message.getContact();
         const texto = obtenerFraseAleatoria();
         
+        // Obtener el ID del usuario de manera más directa
+        const userId = message.author || message.from;
+        
+        if (!userId) {
+            console.error("No se pudo obtener el ID del usuario");
+            return message.reply(texto);
+        }
+        
         await message.react('🤡');
-        await message.reply(`${texto}, @${contact.id.user}`, undefined, {
-            mentions: [contact.id._serialized]
+        
+        // Extraer solo el número de usuario (antes del @)
+        const userNumber = userId.split('@')[0];
+        
+        await message.reply(`${texto}, @${userNumber}`, undefined, {
+            mentions: [userId]
         });
     } catch (e) {
         console.error("Error en handleBotMention:", e);
+        // Fallback: responder sin mención si falla todo
+        try {
+            const texto = obtenerFraseAleatoria();
+            await message.reply(texto);
+        } catch (fallbackError) {
+            console.error("Error en fallback de handleBotMention:", fallbackError);
+        }
     }
 }
 
 async function handleOnce(client, message) {
     try {
-        const contact = await message.getContact();
+        // Obtener el ID del usuario de manera más directa
+        const userId = message.author || message.from;
+        
+        if (!userId) {
+            console.error("No se pudo obtener el ID del usuario");
+            return message.reply('Chupalo entonces');
+        }
+        
         await message.react('😂');
-        await message.reply('Chupalo entonces @' + contact.id.user, undefined, { 
-            mentions: [contact.id._serialized] 
+        
+        // Extraer solo el número de usuario (antes del @)
+        const userNumber = userId.split('@')[0];
+        
+        await message.reply('Chupalo entonces @' + userNumber, undefined, { 
+            mentions: [userId] 
         });
     } catch (e) {
         console.error("Error en handleOnce:", e);
+        // Fallback: responder sin mención si falla todo
+        try {
+            await message.reply('Chupalo entonces');
+        } catch (fallbackError) {
+            console.error("Error en fallback de handleOnce:", fallbackError);
+        }
     }
 }
 

@@ -93,19 +93,51 @@ def main():
     except IOError as e:
         print(f"Error al escribir en el archivo {filename}: {e}")
 
-    def format_row(pos, equipo, puntos):
+    def format_row(pos, equipo, puntos, es_encabezado=False):
         equipo_corto = (equipo[:18] + '..') if len(equipo) > 20 else equipo
-        return f"{str(pos):<3} {equipo_corto:<20} {puntos:>5}"
+        
+        if es_encabezado:
+            return f"   {str(pos):<3} {equipo_corto:<20} {puntos:>5}"
+        
+        try:
+            pos_num = int(pos)
+            # Indicadores de clasificación
+            if pos_num <= 3:
+                indicador = "🏆"  # Libertadores (1-3 + Copa Chile)
+            elif pos_num <= 7:
+                indicador = "🌎"  # Sudamericana (4-7)
+            elif pos_num >= 15:
+                indicador = "⬇️ "  # Descenso (15-16)
+            else:
+                indicador = "  "
+        except ValueError:
+            indicador = "  "
+        
+        return f"{indicador} {str(pos):<3} {equipo_corto:<20} {puntos:>5}"
 
     if not tabla_de_datos:
         print("No se encontraron datos de equipos.")
     else:
-        print('-------------------------------')
-        print(format_row('Pos', 'Equipo', 'Pts'))
-        print('-------------------------------')
-        for fila in tabla_de_datos:
+        print('-----------------------------------')
+        print(format_row('Pos', 'Equipo', 'Pts', es_encabezado=True))
+        print('-----------------------------------')
+        for i, fila in enumerate(tabla_de_datos):
             print(format_row(fila[0], fila[1], fila[2]))
-        print('-------------------------------')
+            
+            # Separadores visuales
+            if i == 2:  # Después del 3er lugar (Libertadores directa)
+                print('-----------------------------------')
+            elif i == 6:  # Después del 7mo lugar (Sudamericana)
+                print('-----------------------------------')
+            elif i == 13:  # Antes de la zona de descenso (pos 14)
+                print('-----------------------------------')
+        
+        print('-----------------------------------')
+        print('\n📋 Leyenda:')
+        print('🏆 = Copa Libertadores (Pos. 1-3 + Campeón Copa Chile)')
+        print('🌎 = Copa Sudamericana (Pos. 4-7)')
+        print('⬇️  = Zona de descenso (Pos. 15-16)')
+        print()
 
 if __name__ == "__main__":
     main()

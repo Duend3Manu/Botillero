@@ -1,75 +1,123 @@
 # -*- coding: utf-8 -*-
+"""
+Script mejorado para obtener estado de Transbank.
+Incluye caché persistente en archivo y manejo robusto de errores.
+"""
 import sys
 import requests
 from bs4 import BeautifulSoup
 import io
+import json
+import os
+import time
+import argparse
 
-# Forma más compatible de asegurar la codificación de la salida a UTF-8
+# Configurar salida UTF-8
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-# Constantes
+# Configuración
 URL_TRANSBANK = 'https://status.transbankdevelopers.cl/'
-EMOJIS = {
-    "Operational": "✅",
-    "Degraded Performance": "⚠️",
-    "Partial Outage": "❌",
-    "Major Outage": "🚨",
-    # Añadimos más estados posibles para ser más robustos
-}
+# Archivo de caché en carpeta temp del proyecto
+CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'temp', 'transbank_cache.json')
+CACHE_DURATION = 300  # 5 minutos
 
-def obtener_estado_transbank():
-    """Obtiene y procesa el estado de los servicios de Transbank."""
+def load_cache():
+    """Carga datos del caché si es válido."""
+    if not os.path.exists(CACHE_FILE):
+        return None
     try:
-        response = requests.get(URL_TRANSBANK, timeout=10) # Añadimos un timeout
+        with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            # Verificar validez del tiempo
+            if time.time() - data.get('timestamp', 0) < CACHE_DURATION:
+                return data.get('payload')
+    except Exception:
+        return None
+    return None
+
+def save_cache(payload):
+    """Guarda datos en el caché."""
+    try:
+        os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
+        with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump({'timestamp': time.time(), 'payload': payload}, f, ensure_ascii=False)
+    except Exception:
+        pass # Ignorar errores de escritura en caché
+
+def get_transbank_status():
+    """Obtiene el estado de los servicios (con caché)."""
+    # 1. Intentar cargar de caché
+    cached_data = load_cache()
+    if cached_data:
+        return cached_data, True
+
+    # 2. Si no hay caché, hacer scraping
+    try:
+        response = requests.get(URL_TRANSBANK, timeout=10)
         response.raise_for_status()
         
         soup = BeautifulSoup(response.text, 'html.parser')
+        container = soup.find('div', class_='components-container')
         
-        # Un selector más específico para evitar elementos no deseados
-        servicios_container = soup.find('div', class_='components-container')
-        
-        # Si el contenedor principal no existe, la página cambió o está rota
-        if not servicios_container:
-            print("No se pudo encontrar el contenedor de servicios en la página. La estructura puede haber cambiado.")
-            return None
+        if not container:
+            return {'error': 'No se encontró el contenedor de servicios'}, False
 
-        servicios = servicios_container.find_all('div', class_='component-inner-container')
-        
-        if not servicios:
-            print("No se encontraron servicios individuales en la página.")
-            return None
+        services = container.find_all('div', class_='component-inner-container')
+        if not services:
+            return {'error': 'No se encontraron servicios listados'}, False
 
-        estado_servicios = {}
-        for servicio in servicios:
-            nombre = servicio.find('span', class_='name').text.strip()
-            estado = servicio.find('span', class_='component-status').text.strip()
-            estado_servicios[nombre] = estado
+        status_map = {}
+        for service in services:
+            name_tag = service.find('span', class_='name')
+            status_tag = service.find('span', class_='component-status')
+            
+            if name_tag and status_tag:
+                name = name_tag.text.strip()
+                status = status_tag.text.strip()
+                status_map[name] = status
         
-        return estado_servicios
+        if not status_map:
+            return {'error': 'No se pudieron extraer los estados'}, False
+
+        # Guardar en caché
+        save_cache(status_map)
+        return status_map, False
 
     except requests.exceptions.Timeout:
-        print(f'Error: La solicitud a {URL_TRANSBANK} tardó demasiado tiempo en responder.')
-        return None
-    except requests.RequestException as e:
-        print(f'Error de red al acceder a la página de Transbank: {e}')
-        return None
+        return {'error': 'Timeout al conectar con Transbank'}, False
     except Exception as e:
-        print(f'Ocurrió un error inesperado al procesar la página: {e}')
-        return None
+        return {'error': f'Error: {str(e)}'}, False
 
 def main():
-    """Función principal para obtener y mostrar el estado de los servicios."""
-    estados = obtener_estado_transbank()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--json', action='store_true', help='Output en formato JSON')
+    args = parser.parse_args()
+
+    data, from_cache = get_transbank_status()
     
-    # Importamos json aquí para usarlo en la salida
-    import json
+    # Estructura de respuesta estandarizada
+    response = {
+        'success': 'error' not in data,
+        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'from_cache': from_cache,
+        'data': data
+    }
 
-    if estados:
-        # Imprime el diccionario de estados directamente como un string JSON
-        print(json.dumps(estados))
+    if args.json:
+        print(json.dumps(response, ensure_ascii=False, indent=2))
     else:
-        # Si hay un error, imprime un objeto JSON de error
-        print(json.dumps({"error": "No se pudo obtener el estado de Transbank en este momento."}))
+        # Formato texto para WhatsApp
+        print("💳 *Estado de Servicios Transbank* 💳\n")
+        
+        if 'error' in data:
+            print(f"❌ Error: {data['error']}")
+        else:
+            for service, status in data.items():
+                emoji = "✅" if status == "Operational" else "❌"
+                # Traducir estado si es necesario o dejarlo en inglés como pidió el usuario ("perational")
+                print(f"{emoji} {service}: {status}")
+            
+            print(f"\n_📅 Actualizado: {response['timestamp']}_")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

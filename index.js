@@ -5,6 +5,16 @@
 // Debe ser la primera línea para que las variables estén disponibles en todo el proyecto.
 require('dotenv').config();
 
+// --- Manejo de Errores Globales ---
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Rejection en:', promise, 'razón:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('❌ Uncaught Exception:', error);
+    // No hacer process.exit() para que el bot siga funcionando
+});
+
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const commandHandler = require('./src/handlers/command.handler');
@@ -38,8 +48,8 @@ client.on('message_update', message => handleMessageUpdate(client, message));
 const app = express();
 app.use(express.json());
 
-const NOTIFICATION_PORT = 3001;
-const GROUP_ID = '56933400670-1571689305@g.us'; 
+const NOTIFICATION_PORT = process.env.NOTIFICATION_PORT || 3001;
+const GROUP_ID = process.env.NOTIFICATION_GROUP_ID || '56933400670-1571689305@g.us'; 
 
 app.post('/send-notification', (req, res) => {
     const message = req.body.message;
