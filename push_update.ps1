@@ -1,4 +1,4 @@
-# push_update.ps1 - Subir cambios a GitHub con número de actualización incremental
+# push_update.ps1 - Subir cambios a GitHub con número de actualización incremental y sincronizar con remoto
 
 # Ruta al archivo que almacena el contador de actualizaciones
 $counterFile = Join-Path -Path $PSScriptRoot -ChildPath ".push_counter"
@@ -23,5 +23,21 @@ $commitMessage = "actualizacion numero $counter"
 
 git commit -m $commitMessage
 
+# Sincronizar con el remoto antes de hacer push
+Write-Host "Sincronizando con el remoto..."
+# Intentar pull con rebase para mantener historial lineal
+$pullResult = git pull --rebase
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Error al hacer git pull --rebase. Revise los conflictos manualmente antes de volver a ejecutar el script."
+    exit $LASTEXITCODE
+}
+
 # Enviar al remoto configurado (upstream)
+Write-Host "Realizando push..."
 git push
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Error al hacer git push. Revise el mensaje anterior para más detalles."
+    exit $LASTEXITCODE
+}
+
+Write-Host "Actualización completada exitosamente."
