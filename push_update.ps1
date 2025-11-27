@@ -26,7 +26,7 @@ git commit -m $commitMessage
 # Sincronizar con el remoto antes de hacer push
 Write-Host "Sincronizando con el remoto..."
 # Intentar pull con rebase para mantener historial lineal
-$pullResult = git pull --rebase
+git pull --rebase
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Error al hacer git pull --rebase. Revise los conflictos manualmente antes de volver a ejecutar el script."
     exit $LASTEXITCODE
