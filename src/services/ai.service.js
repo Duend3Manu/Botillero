@@ -27,7 +27,7 @@ async function findCommandWithAI(userQuery) {
         return "Lo siento, compa. La función de ayuda con IA no está configurada correctamente. Falta la API Key.";
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
         Eres "Botillero", un asistente de chatbot para WhatsApp en un grupo de amigos chilenos. Tu personalidad es relajada, amigable y usas modismos chilenos como "wena", "compa", "cachai", "al tiro".
@@ -56,7 +56,7 @@ async function explainTransbankStatusWithAI(failingServices) {
         return "La función de IA no está configurada. Hay problemas en Transbank, pero no puedo explicarlos.";
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const servicesText = JSON.stringify(failingServices, null, 2);
 
     const prompt = `
