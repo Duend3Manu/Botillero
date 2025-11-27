@@ -245,23 +245,6 @@ function handleMenu() {
   \`!s\` - Crea un sticker (responde a una imagen/video).
   \`!audios\` - Lista de comandos de audio.
   \`!chiste\` - Escucha un chiste en audio.
-  \`!horoscopo [signo]\` - Tu horóscopo diario.
-  \`!18\` - Cuenta regresiva para el 18.
-  \`!navidad\` - Cuenta regresiva para Navidad.
-  \`!añonuevo\` - Cuenta regresiva para Año Nuevo.
-
-*⚽ Fútbol*
-  \`!tabla\` - Tabla de posiciones del torneo nacional.
-  \`!partidos\` - Resumen de la fecha actual.
-  \`!prox\` - Próximos partidos del torneo.
-  \`!tclasi\` - Tabla de las clasificatorias.
-  \`!clasi\` - Próximos partidos de clasificatorias.
-
-*🛠️ Utilidades del Bot*
-  \`!ping\` - Revisa el estado del sistema del bot.
-  \`!id\` - Muestra el ID de este chat.
-  \`!ayuda [duda]\` - Te ayudo a encontrar un comando.
-  \`!ticket\` - Lista todos los recordatorios.
   \`!caso [texto]\` - Registra un "caso aislado".
     `.trim();
 }
