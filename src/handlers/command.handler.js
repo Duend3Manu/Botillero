@@ -12,6 +12,7 @@ const externalService = require('../services/external.service');;
 
 // Forma correcta y limpia de importar las funciones que necesitamos
 const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require('../services/league.service.js');
+const { getChampionsMatches, getChampionsStandings } = require('../services/champions.service.js');
 
 const { getTransbankStatus } = require('../services/transbank.service.js');
 // --- Importaciones de Manejadores (Handlers) ---
@@ -45,7 +46,7 @@ const validCommands = new Set([
     'wiki', 'noticias', 'g', 'pat', 'patente', 's', 'audios', 'sonidos',
     'chiste', 'ticket', 'ticketr', 'tickete', 'caso', 'ecaso', 'icaso', 'transbank',
     'ayuda', 'num', 'tel', 'tne', 'pase', 'whois', 'net', 'nic', 'id',
-    'random', 'dato', 'curiosidad', 'toimg', 'resume'
+    'random', 'dato', 'curiosidad', 'toimg', 'resume', 'champion', 'tchampion'
 ]); 
 
 async function commandHandler(client, message) {
@@ -110,6 +111,12 @@ async function commandHandler(client, message) {
                     break;
                 case 'partidos':
                     replyMessage = await getMatchDaySummary();
+                    break;
+                case 'champion':
+                    replyMessage = await getChampionsMatches();
+                    break;
+                case 'tchampion':
+                    replyMessage = await getChampionsStandings();
                     break;
                 case 'metro':
                     // El servicio ya devuelve el mensaje completo con formato
