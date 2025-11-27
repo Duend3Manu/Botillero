@@ -38,9 +38,12 @@ client.on('ready', () => {
 });
 
 // --- MANEJADORES DE EVENTOS ---
-client.on('message', message => commandHandler(client, message));
-client.on('message_create', message => handleMessageCreate(client, message));
-// LÍNEA CORREGIDA:
+// Combinamos message_create con commandHandler para evitar duplicación
+client.on('message_create', async (message) => {
+    await handleMessageCreate(client, message);
+    await commandHandler(client, message);
+});
+
 client.on('message_revoke_everyone', (after, before) => handleMessageRevoke(client, after, before));
 client.on('message_update', message => handleMessageUpdate(client, message));
 
