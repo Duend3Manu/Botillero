@@ -16,5 +16,8 @@
     "systeminformation": "^5.27.11",
     "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main",
     "whois": "^2.0.5"
+  },
+  "scripts": {
+    "botillero": "node index.js"
   }
 }
