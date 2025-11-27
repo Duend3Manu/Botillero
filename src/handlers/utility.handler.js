@@ -219,13 +219,14 @@ function handleMenu() {
   \`!valores\` - Indicadores económicos.
   \`!feriados\` - Próximos feriados en Chile.
   \`!far [comuna]\` - Farmacias de turno.
-  \`!metro\` - Estado de la red de Metro.
+  \`!metro\` - Estado de la red de Metro (con IA para rutas alternas si hay problemas).
   \`!sismos\` - Últimos sismos reportados.
   \`!bus [paradero]\` - Próximas llegadas de micros.
   \`!sec\` o \`!secrm\` - Cortes de luz a nivel nacional o RM.
   \`!bencina [comuna]\` - Precios de combustibles.
   \`!trstatus\` - Estado de los servicios de Transbank.
   \`!bolsa\` - Indicadores de la Bolsa de Santiago.
+  \`!resume [URL]\` - Resume cualquier artículo web con IA.
 
 *🔍 Búsquedas e Información*
   \`!wiki [búsqueda]\` - Busca en Wikipedia.

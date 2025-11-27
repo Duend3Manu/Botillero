@@ -3,12 +3,24 @@
 
 const commandHandler = require('./command.handler');
 const { storeMessage, getOriginalMessage } = require('../utils/db.js');
+const { handleUrlSummary } = require('./url-summary.handler');
 
 // Se activa cuando un usuario crea un mensaje
 async function handleMessageCreate(client, message) {
     if (!message.fromMe) {
         // Guardamos una copia de cada mensaje para poder compararlo si se edita
         storeMessage(message.id._serialized, message.body);
+        
+        // Detectar y resumir URLs automáticamente
+        try {
+            const summary = await handleUrlSummary(message);
+            if (summary) {
+                await message.reply(summary);
+            }
+        } catch (error) {
+            console.error('(Events) -> Error al intentar resumir URL:', error.message);
+            // No interrumpir el flujo normal si hay error en URL summary
+        }
     }
 }
 

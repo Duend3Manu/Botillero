@@ -1,12 +1,9 @@
 // src/handlers/ai.handler.js
 "use strict";
 
-// --- ¡NUEVO! Importamos el servicio de IA ---
+// --- Importamos servicios ---
 const { findCommandWithAI } = require('../services/ai.service');
-
-// --- ¡NUEVO! Cooldown para la IA ---
-let lastAiRequestTimestamp = 0;
-const AI_COOLDOWN_SECONDS = 7; // 7 segundos de espera
+const rateLimiter = require('../services/rate-limiter.service');
 
 async function handleAiHelp(message) {
     const userQuery = message.body.substring(message.body.indexOf(' ') + 1).toLowerCase().trim();
@@ -15,19 +12,16 @@ async function handleAiHelp(message) {
         return "¡Wena compa! Soy Botillero. Dime qué necesitas hacer y te ayudaré a encontrar el comando correcto. 🤖\n\nPor ejemplo: `!ayuda quiero saber el clima en valparaíso`";
     }
 
-    // --- ¡NUEVO! Verificación del cooldown ---
-    const now = Date.now();
-    const timeSinceLastRequest = (now - lastAiRequestTimestamp) / 1000;
-
-    if (timeSinceLastRequest < AI_COOLDOWN_SECONDS) {
-        const timeLeft = Math.ceil(AI_COOLDOWN_SECONDS - timeSinceLastRequest);
-        return `⏳ Calma las pasiones, espera ${timeLeft} segundos antes de volver a intentarlo.`;
+    // Verificación del cooldown global
+    const cooldown = rateLimiter.checkCooldown();
+    if (!cooldown.canMakeRequest) {
+        return rateLimiter.getCooldownMessage(cooldown.timeLeft);
     }
 
     try {
         // Llamamos a la IA para que nos dé la respuesta
         const aiResponse = await findCommandWithAI(userQuery);
-        lastAiRequestTimestamp = Date.now(); // Actualizamos el timestamp solo si la llamada fue exitosa
+        rateLimiter.updateLastRequest(); // Actualizamos el timestamp solo si la llamada fue exitosa
         return aiResponse;
     } catch (error) {
         console.error("Error al contactar la IA de Google:", error);

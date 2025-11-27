@@ -4,7 +4,7 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // La API Key se carga desde el archivo .env gracias a la configuración en index.js
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Lista de comandos para que la IA los conozca y pueda recomendarlos.
 const commandList = `
@@ -22,8 +22,8 @@ const commandList = `
  * @returns {Promise<string>} - La respuesta generada por la IA.
  */
 async function findCommandWithAI(userQuery) {
-    if (!process.env.GOOGLE_API_KEY) {
-        console.error("La API Key de Google no está configurada en .env");
+    if (!process.env.GEMINI_API_KEY) {
+        console.error("La API Key de Gemini no está configurada en .env");
         return "Lo siento, compa. La función de ayuda con IA no está configurada correctamente. Falta la API Key.";
     }
 
@@ -52,7 +52,7 @@ async function findCommandWithAI(userQuery) {
  * @returns {Promise<string>} - La explicación generada por la IA.
  */
 async function explainTransbankStatusWithAI(failingServices) {
-    if (!process.env.GOOGLE_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
         return "La función de IA no está configurada. Hay problemas en Transbank, pero no puedo explicarlos.";
     }
 
