@@ -4,3 +4,11 @@ node_modules/
 .wwebjs_auth/session
 .wwebjs_cache/
 messages.db
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
