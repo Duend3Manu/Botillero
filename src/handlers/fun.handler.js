@@ -138,7 +138,12 @@ async function handleSound(client, message, command) {
     const audioPath = path.join(__dirname, '..', '..', 'mp3', soundInfo.file);
 
     if (fs.existsSync(audioPath)) {
-        await message.react(soundInfo.reaction);
+        // Intentar reaccionar, pero ignorar si falla
+        try {
+            await message.react(soundInfo.reaction);
+        } catch (reactionError) {
+            console.log(`(MessagingService) -> No se pudo reaccionar con ${soundInfo.reaction}: ${reactionError.message}`);
+        }
         const media = MessageMedia.fromFilePath(audioPath);
         message.reply(media, undefined, { sendAudioAsVoice: false }); // Cambiado a false para máxima compatibilidad
     } else {
@@ -182,7 +187,7 @@ function handleCountdown(command) {
     const year = moment().year();
     switch (command) {
         case '18':
-            return getCountdownMessage(moment.tz(`${year}-09-18 00:00:00`, 'America/Santiago'), 'el 18', '�🇱');
+            return getCountdownMessage(moment.tz(`${year}-09-18 00:00:00`, 'America/Santiago'), 'el 18', '🇨🇱');
         case 'navidad':
             return getCountdownMessage(moment.tz(`${year}-12-25 00:00:00`, 'America/Santiago'), 'Navidad', '🎅');
         case 'añonuevo':
@@ -269,7 +274,12 @@ async function handleBotMention(client, message) {
             return message.reply(texto);
         }
         
-        await message.react('🤡');
+        // Intentar reaccionar, pero ignorar si falla
+        try {
+            await message.react('🤡');
+        } catch (reactionError) {
+            console.log(`(MessagingService) -> No se pudo reaccionar con 🤡: ${reactionError.message}`);
+        }
         
         // Extraer solo el número de usuario (antes del @)
         const userNumber = userId.split('@')[0];
@@ -299,7 +309,12 @@ async function handleOnce(client, message) {
             return message.reply('Chupalo entonces');
         }
         
-        await message.react('😂');
+        // Intentar reaccionar, pero ignorar si falla
+        try {
+            await message.react('😂');
+        } catch (reactionError) {
+            console.log(`(MessagingService) -> No se pudo reaccionar con 😂: ${reactionError.message}`);
+        }
         
         // Extraer solo el número de usuario (antes del @)
         const userNumber = userId.split('@')[0];
