@@ -41,7 +41,10 @@ client.on('ready', () => {
 // Combinamos message_create con commandHandler para evitar duplicación
 client.on('message_create', async (message) => {
     await handleMessageCreate(client, message);
-    await commandHandler(client, message);
+    // Solo procesamos comandos de usuarios, no de mensajes del bot
+    if (!message.fromMe) {
+        await commandHandler(client, message);
+    }
 });
 
 client.on('message_revoke_everyone', (after, before) => handleMessageRevoke(client, after, before));
