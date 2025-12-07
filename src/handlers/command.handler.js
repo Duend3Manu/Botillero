@@ -25,7 +25,7 @@ const { handleAiHelp } = require('./ai.handler');
 const { handlePhoneSearch, handleTneSearch, handlePatenteSearch } = require('./personalsearch.handler');
 const { handleNetworkQuery, handleNicClSearch } = require('./network.handler');
 const { handleReaction } = require('../services/messaging.service');
-const { summarizeUrl } = require('../services/url-summarizer.service');
+// const { summarizeUrl } = require('../services/url-summarizer.service'); // ELIMINADO
 const rateLimiter = require('../services/rate-limiter.service');
 // --- Lógica Principal ---
 const soundCommands = getSoundCommands();
@@ -46,7 +46,7 @@ const validCommands = new Set([
     'wiki', 'noticias', 'g', 'pat', 'patente', 's', 'audios', 'sonidos',
     'chiste', 'ticket', 'ticketr', 'tickete', 'caso', 'ecaso', 'icaso', 'transbank',
     'ayuda', 'num', 'tel', 'tne', 'pase', 'whois', 'net', 'nic', 'id',
-    'random', 'dato', 'curiosidad', 'toimg', 'resume', 'champion', 'tchampion'
+    'random', 'dato', 'curiosidad', 'toimg', 'champion', 'tchampion'
 ]); 
 
 async function commandHandler(client, message) {
@@ -216,38 +216,11 @@ async function commandHandler(client, message) {
                         replyMessage = 'El mensaje al que respondiste no es un sticker.';
                     }
                     break;
+                /* ELIMINADO POR SOLICITUD DE USUARIO
                 case 'resume':
-                    // Extraer URL del comando: !resume [URL] o responder a un mensaje con URL
-                    let urlToResume = message.body.replace(/!resume|\/resume/i, '').trim();
-                    
-                    if (!urlToResume && message.hasQuotedMsg) {
-                        const quoted = await message.getQuotedMessage();
-                        urlToResume = quoted.body.match(/(https?:\/\/[^\s]+)/)?.[0];
-                    }
-                    
-                    if (!urlToResume) {
-                        replyMessage = '📄 Usa: `!resume [URL]` o responde a un mensaje que tenga una URL.\n\nEjemplo: `!resume https://example.com`';
-                        break;
-                    }
-                    
-                    // Verificar cooldown
-                    const resumeCooldown = rateLimiter.checkCooldown();
-                    if (!resumeCooldown.canMakeRequest) {
-                        replyMessage = rateLimiter.getCooldownMessage(resumeCooldown.timeLeft);
-                        break;
-                    }
-                    
-                    try {
-                        await message.react('⏳');
-                        const summary = await summarizeUrl(urlToResume);
-                        rateLimiter.updateLastRequest();
-                        await message.react('✅');
-                        replyMessage = summary;
-                    } catch (error) {
-                        await message.react('❌');
-                        replyMessage = `❌ No pude resumir esa URL: ${error.message}`;
-                    }
+                    // ... (Lógica eliminada)
                     break;
+                */
                 default: break;
             }
 
