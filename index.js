@@ -24,8 +24,7 @@ const express = require('express');
 console.log("Iniciando Botillero v2.0 (Arquitectura Modular)...");
 
 const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: { headless: true, args: ['--no-sandbox'] }
+    authStrategy: new LocalAuth()
 });
 
 client.on('qr', qr => {
@@ -70,6 +69,17 @@ app.post('/send-notification', (req, res) => {
 
 app.listen(NOTIFICATION_PORT, () => {
     console.log(`(API) -> Servidor de notificaciones escuchando en el puerto ${NOTIFICATION_PORT}`);
+});
+
+// --- CIERRE ELEGANTE (Graceful Shutdown) ---
+process.on('SIGINT', async () => {
+    console.log('(SIGINT) -> Cerrando cliente y liberando recursos...');
+    try {
+        await client.destroy();
+    } catch (e) {
+        console.error('Error al cerrar cliente:', e);
+    }
+    process.exit(0);
 });
 
 // Iniciar el cliente
