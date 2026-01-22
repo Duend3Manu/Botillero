@@ -20,7 +20,7 @@ async function handleFapSearch(client, message) {
         return;
     }
 
-    await message.react('⏳');
+    try { await message.react('⏳'); } catch (e) {}
     try {
         const pythonScriptPath = path.join(__dirname, '..', '..', 'scripts', 'python', 'fap_search.py');
         const pythonProcess = spawn('python', [pythonScriptPath, searchTerm]);
@@ -50,7 +50,7 @@ async function handleFapSearch(client, message) {
         const responseText = result.text;
 
         await client.sendMessage(message.from, responseText);
-        await message.react('✅');
+        try { await message.react('✅'); } catch (e) {}
 
     } catch (error) {
         console.error('Error al realizar la búsqueda en Fapello (llamando a Python):', error);

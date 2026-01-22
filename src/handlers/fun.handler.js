@@ -7,6 +7,25 @@ const moment = require('moment-timezone');
 const ffmpeg = require('fluent-ffmpeg');
 const { MessageMedia } = require('whatsapp-web.js');
 
+// --- Configuración de FFmpeg (Vital para stickers animados) ---
+// Definimos la ruta explícita para asegurar que el "códec" funcione
+const ffmpegPath = 'C:\\FFmpeg\\bin\\ffmpeg.exe';
+
+if (fs.existsSync(ffmpegPath)) {
+    ffmpeg.setFfmpegPath(ffmpegPath);
+
+    // whatsapp-web.js busca ffmpeg en el PATH del sistema. Lo agregamos temporalmente.
+    if (process.platform === 'win32') {
+        const ffmpegDir = path.dirname(ffmpegPath);
+        if (!process.env.PATH.includes(ffmpegDir)) {
+            process.env.PATH += `;${ffmpegDir}`;
+            console.log(`(System) -> FFmpeg agregado al PATH para stickers animados.`);
+        }
+    }
+} else {
+    console.warn(`(System) -> ⚠️ ADVERTENCIA: No se encontró FFmpeg en "${ffmpegPath}". Los stickers animados no funcionarán.`);
+}
+
 // --- Lógica para Stickers ---
 async function handleSticker(client, message) {
     let mediaMessage = message;
@@ -140,9 +159,10 @@ async function handleSound(client, message, command) {
     if (fs.existsSync(audioPath)) {
         // Intentar reaccionar, pero ignorar si falla
         try {
+            await new Promise(resolve => setTimeout(resolve, 500)); // Pausa de 0.5s
             await message.react(soundInfo.reaction);
         } catch (reactionError) {
-            console.log(`(MessagingService) -> No se pudo reaccionar con ${soundInfo.reaction}: ${reactionError.message}`);
+            // Ignoramos el error cosmético
         }
         const media = MessageMedia.fromFilePath(audioPath);
         message.reply(media, undefined, { sendAudioAsVoice: false }); // Cambiado a false para máxima compatibilidad
@@ -276,9 +296,10 @@ async function handleBotMention(client, message) {
         
         // Intentar reaccionar, pero ignorar si falla
         try {
+            await new Promise(resolve => setTimeout(resolve, 500));
             await message.react('🤡');
         } catch (reactionError) {
-            console.log(`(MessagingService) -> No se pudo reaccionar con 🤡: ${reactionError.message}`);
+            // Ignoramos el error cosmético
         }
         
         // Extraer solo el número de usuario (antes del @)
@@ -311,9 +332,10 @@ async function handleOnce(client, message) {
         
         // Intentar reaccionar, pero ignorar si falla
         try {
+            await new Promise(resolve => setTimeout(resolve, 500));
             await message.react('😂');
         } catch (reactionError) {
-            console.log(`(MessagingService) -> No se pudo reaccionar con 😂: ${reactionError.message}`);
+            // Ignoramos el error cosmético
         }
         
         // Extraer solo el número de usuario (antes del @)

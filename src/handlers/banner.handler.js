@@ -34,7 +34,7 @@ async function handleBanner(message) {
     let bannerPath;
     try {
         // Notificamos al usuario que estamos trabajando
-        await message.react('⏳');
+        try { await message.react('⏳'); } catch (e) {}
         await message.reply(`Creando tu banner estilo *${style}*... ✨`);
         
         // Llamamos al servicio que genera la imagen

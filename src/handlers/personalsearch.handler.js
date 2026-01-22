@@ -10,12 +10,12 @@ async function handlePatenteSearch(message) {
         return message.reply(`🚨 El formato de la patente es inválido.\n\n*Usa:* \`!pat ABC123\`\nDebe tener *6 caracteres*, solo letras y números, sin espacios.`);
     }
     
-    await message.react('⏳');
     const nombre = message._data.notifyName || 'amigo(a)';
+    try { await message.react('⏳'); } catch (e) {}
     await message.reply(`¡Hola ${nombre}! 🚗 Estoy procesando tu consulta de patente *${patente.toUpperCase()}*...`);
     
     const result = await getPatenteDataFormatted(patente);
-    await message.react(result.error ? '❌' : '✅');
+    try { await message.react(result.error ? '❌' : '✅'); } catch (e) {}
     return message.reply(result.error ? result.message : result.data);
 }
 
@@ -28,10 +28,10 @@ async function handleTneSearch(message) {
     }
     
     const rut = matchRut[1];
-    await message.react('⏳');
+    try { await message.react('⏳'); } catch (e) {}
     await message.reply(`Estoy buscando información para el RUT *${rut.toUpperCase()}*...`);
-
     const result = await getRutData(rut);
+    try { await message.react(result.error ? '❌' : '✅'); } catch (e) {}
 
     let responseText;
     if (result.error) {
@@ -67,7 +67,9 @@ async function handlePhoneSearch(client, message) {
         return message.reply("Debes ingresar un número de teléfono. Ejemplo: `!num 912345678`");
     }
 
+    try { await message.react('⏳'); } catch (e) {}
     const result = await getPhoneData(phoneNumber);
+    try { await message.react(result.error ? '❌' : '✅'); } catch (e) {}
 
     if (result.error) return message.reply(result.message);
 

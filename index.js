@@ -19,6 +19,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const commandHandler = require('./src/handlers/command.handler');
 const { handleMessageCreate, handleMessageUpdate, handleMessageRevoke } = require('./src/handlers/events.handler');
+const { handlePing } = require('./src/handlers/system.handler');
 const express = require('express');
 
 console.log("Iniciando Botillero v2.0 (Arquitectura Modular)...");
@@ -42,7 +43,11 @@ client.on('message_create', async (message) => {
     await handleMessageCreate(client, message);
     // Solo procesamos comandos de usuarios, no de mensajes del bot
     if (!message.fromMe) {
-        await commandHandler(client, message);
+        if (message.body.toLowerCase() === '!ping') {
+            await handlePing(message);
+        } else {
+            await commandHandler(client, message);
+        }
     }
 });
 
