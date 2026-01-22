@@ -44,7 +44,8 @@ client.on('message_create', async (message) => {
     // Solo procesamos comandos de usuarios, no de mensajes del bot
     if (!message.fromMe) {
         if (message.body.toLowerCase() === '!ping') {
-            await handlePing(message);
+            const response = await handlePing(message);
+            await message.reply(response);
         } else {
             await commandHandler(client, message);
         }
