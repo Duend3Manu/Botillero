@@ -222,10 +222,9 @@ function handleMenu() {
   \`!metro\` - Estado de la red de Metro (con IA para rutas alternas si hay problemas).
   \`!sismos\` - Últimos sismos reportados.
   \`!bus [paradero]\` - Próximas llegadas de micros.
-  \`!sec\` o \`!secrm\` - Cortes de luz a nivel nacional o RM.
-  \`!bencina [comuna]\` - Precios de combustibles.
-  \`!trstatus\` - Estado de los servicios de Transbank.
-  \`!bolsa\` - Indicadores de la Bolsa de Santiago.
+    \`!sec\` o \`!secrm\` - Cortes de luz a nivel nacional o RM.
+    \`!trstatus\` - Estado de los servicios de Transbank.
+
   \`!resume [URL]\` - Resume cualquier artículo web con IA.
 
 *🔍 Búsquedas e Información*

@@ -41,7 +41,7 @@ const validCommands = new Set([
     ...soundCommands, ...countdownCommands,
     'tabla', 'ligatabla', 'prox', 'ligapartidos', 'partidos', 'metro',
     'tclasi', 'selecciontabla', 'clasi', 'seleccionpartidos', 'valores',
-    'horoscopo', 'bencina', 'trstatus', 'bolsa', 'ping', 'feriados',
+    'horoscopo', 'trstatus', 'ping', 'feriados',
     'far', 'clima', 'sismos', 'bus', 'sec', 'secrm', 'menu', 'comandos',
     'wiki', 'noticias', 'g', 'pat', 'patente', 's', 'audios', 'sonidos',
     'chiste', 'ticket', 'ticketr', 'tickete', 'caso', 'ecaso', 'icaso', 'transbank',
@@ -138,15 +138,9 @@ async function commandHandler(client, message) {
                         }
                     }
                     break;
-                case 'bencina':
-                    const comuna = message.body.split(' ')[1];
-                    replyMessage = await externalService.getBencinaData(comuna);
-                    break;
+                // El comando 'bencina' fue eliminado del proyecto.
                 case 'trstatus':
                     replyMessage = await externalService.getTraductorStatus();
-                    break;
-                case 'bolsa':
-                    replyMessage = await externalService.getBolsaData();
                     break;
                 case 'transbank':
                     const now = Date.now();

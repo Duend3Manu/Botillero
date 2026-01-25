@@ -4,28 +4,8 @@
 const pythonService = require('./python.service');
 const { cleanPythonOutput } = require('../utils/sanitizer.util');
 
-async function getBencinaData(comuna) {
-    if (!comuna) {
-        return "Debes especificar una comuna. Ejemplo: `!bencina santiago`";
-    }
-    try {
-        console.log(`(Servicio Externo) -> Ejecutando bencina.py para ${comuna}...`);
-        const result = await pythonService.executeScript('bencina.py', [comuna]);
-        
-        // Sanitizar para WhatsApp
-        let bencinaData = cleanPythonOutput(result.stdout);
-        
-        if (!bencinaData) {
-            console.error(`bencina.py stderr: ${result.stderr}`);
-            return `No se encontraron datos de bencina para "${comuna}".`;
-        }
-        
-        return bencinaData;
-    } catch (error) {
-        console.error("Error en getBencinaData:", error.message);
-        return "No pude obtener los precios de la bencina en este momento.";
-    }
-}
+// La funcionalidad de consulta de bencina fue eliminada.
+// Si necesitas restaurarla, implementar `getBencinaData` llamando al script correspondiente.
 
 async function getTraductorStatus() {
     try {
@@ -51,28 +31,6 @@ async function getTraductorStatus() {
     }
 }
 
-async function getBolsaData() {
-    try {
-        console.log(`(Servicio Externo) -> Ejecutando bolsa.py...`);
-        const result = await pythonService.executeScript('bolsa.py');
-        
-        // Sanitizar para WhatsApp
-        let bolsaData = cleanPythonOutput(result.stdout);
-        
-        if (!bolsaData) {
-            console.error(`bolsa.py stderr: ${result.stderr}`);
-            return "No se pudieron obtener los datos de la bolsa.";
-        }
-        
-        return bolsaData;
-    } catch (error) {
-        console.error("Error en getBolsaData:", error.message);
-        return "No pude obtener los datos de la bolsa en este momento.";
-    }
-}
-
 module.exports = {
-    getBencinaData,
     getTraductorStatus,
-    getBolsaData,
 };

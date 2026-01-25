@@ -8,7 +8,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Lista de comandos para que la IA los conozca y pueda recomendarlos.
 const commandList = `
-!clima [ciudad], !valores, !feriados, !far [comuna], !metro, !sismos, !bus [paradero], !sec, !secrm, !bencina [comuna], !trstatus, !bolsa,
+!clima [ciudad], !valores, !feriados, !far [comuna], !metro, !sismos, !bus [paradero], !sec, !secrm, !trstatus,
 !wiki [búsqueda], !g [búsqueda], !noticias, !pat [patente], !num [número], !tne [rut],
 !whois [dominio/ip], !nic [dominio.cl],
 !s, !toimg, !audios, !chiste, !horoscopo [signo], !18, !navidad, !añonuevo,

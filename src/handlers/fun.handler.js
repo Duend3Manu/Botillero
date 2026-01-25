@@ -26,72 +26,141 @@ if (fs.existsSync(ffmpegPath)) {
     console.warn(`(System) -> ⚠️ ADVERTENCIA: No se encontró FFmpeg en "${ffmpegPath}". Los stickers animados no funcionarán.`);
 }
 
+// --- Función Auxiliar: Conversión Manual a WebP ---
+// Convierte videos/GIFs a WebP animado optimizado para WhatsApp
+async function convertToWebP(media) {
+    return new Promise((resolve, reject) => {
+        const tempDir = path.join(__dirname, '../../temp');
+        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+        const ext = media.mimetype.split('/')[1].split(';')[0] || 'dat';
+        const inputPath = path.join(tempDir, `sticker_in_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`);
+        const outputPath = path.join(tempDir, `sticker_out_${Date.now()}_${Math.random().toString(36).substring(7)}.webp`);
+
+        fs.writeFileSync(inputPath, media.data, 'base64');
+
+        ffmpeg(inputPath)
+            .inputOptions(['-t 6']) // Máximo 6 segundos
+            .outputOptions([
+                '-vcodec', 'libwebp',
+                '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,fps=12,pad=512:512:-1:-1:color=white@0.0,split[a][b];[a]palettegen[p];[b][p]paletteuse',
+                '-loop', '0',
+                '-an', // Sin audio
+                '-preset', 'default',
+                '-q:v', '40', // Calidad media/baja para reducir peso
+                '-lossless', '0'
+            ])
+            .save(outputPath)
+            .on('end', () => {
+                try {
+                    const webpData = fs.readFileSync(outputPath, 'base64');
+                    const newMedia = new MessageMedia('image/webp', webpData, 'sticker.webp');
+                    fs.unlinkSync(inputPath);
+                    fs.unlinkSync(outputPath);
+                    resolve(newMedia);
+                } catch (e) { reject(e); }
+            })
+            .on('error', (err) => {
+                if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+                if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+                reject(err);
+            });
+    });
+}
+
 // --- Lógica para Stickers ---
 async function handleSticker(client, message) {
-    let mediaMessage = message;
-    
-    // Si el mensaje cita otro mensaje, intentar obtener el mensaje citado
-    if (message.hasQuotedMsg) {
-        const quotedMsg = await message.getQuotedMessage();
-        if (quotedMsg.hasMedia) {
-            mediaMessage = quotedMsg;
-        }
-    }
-
-    // Verificar si tiene media
-    if (mediaMessage.hasMedia) {
-        // Log para diagnóstico
-        console.log(`(Sticker) -> Tipo de mensaje: ${mediaMessage.type}`);
+    try {
+        let mediaMessage = message;
         
-        // Validación del tipo de mensaje
-        const validTypes = ['image', 'video', 'gif'];
-        if (!validTypes.includes(mediaMessage.type)) {
-            return message.reply("❌ Solo puedo crear stickers desde imágenes, videos o GIFs.");
-        }
-
-        try {
-            // Descargar media con reintentos
-            let media = null;
-            const maxRetries = 3;
-            const retryDelay = 1500;
-
-            for (let i = 0; i < maxRetries; i++) {
-                try {
-                    console.log(`(Sticker) -> Intentando descargar media (Intento ${i + 1}/${maxRetries})...`);
-                    media = await mediaMessage.downloadMedia();
-                    if (media) {
-                        console.log(`(Sticker) -> Media descargado exitosamente. Mimetype: ${media.mimetype}`);
-                        break;
-                    }
-                } catch (downloadError) {
-                    console.warn(`(Sticker) -> Falló el intento ${i + 1}: ${downloadError.message}`);
-                    if (i < maxRetries - 1) {
-                        await new Promise(resolve => setTimeout(resolve, retryDelay));
-                    }
+        // 1. Si el mensaje no tiene media, revisamos si cita a uno
+        if (!message.hasMedia) {
+            if (message.hasQuotedMsg) {
+                const quotedMsg = await message.getQuotedMessage();
+                if (quotedMsg.hasMedia) {
+                    mediaMessage = quotedMsg;
+                }
+            } else {
+                // Si no cita nada, buscamos el último mensaje con media en el chat (historial)
+                const chat = await message.getChat();
+                const messages = await chat.fetchMessages({ limit: 10 });
+                const lastMedia = messages.reverse().find(msg => msg.hasMedia && (msg.type === 'video' || msg.type === 'gif' || msg.type === 'image'));
+                if (lastMedia) {
+                    mediaMessage = lastMedia;
                 }
             }
-
-            if (!media) {
-                return message.reply("❌ No se pudo descargar el archivo para crear el sticker. Intenta con un archivo más reciente o envía el archivo directamente (no reenviado).");
-            }
-
-            // Crear sticker con metadatos
-            const metadata = {
-                sendMediaAsSticker: true,
-                stickerAuthor: "Botillero",
-                stickerName: "Creado con Botillero"
-            };
-
-            console.log(`(Sticker) -> Enviando sticker...`);
-            await message.reply(media, undefined, metadata);
-            console.log(`(Sticker) -> Sticker enviado exitosamente.`);
-
-        } catch (e) {
-            message.reply("❌ Hubo un error al crear el sticker.");
-            console.error("(Sticker) -> Error:", e);
         }
-    } else {
-        message.reply("📎 Responde a una imagen, video o GIF, o envía uno junto al comando `!s`.");
+
+        // 2. Validación final
+        if (!mediaMessage.hasMedia || !['video', 'gif', 'image'].includes(mediaMessage.type)) {
+            return message.reply('❌ Por favor, envía o responde a una imagen, video o GIF con el comando `!s`.');
+        }
+
+        console.log(`(Sticker) -> Procesando mensaje tipo: ${mediaMessage.type}`);
+        let media = await mediaMessage.downloadMedia();
+        
+        if (!media) {
+            return message.reply("❌ No se pudo descargar el archivo.");
+        }
+
+        // 3. Procesamiento según tipo
+        const isAnimated = media.mimetype.includes('video') || media.mimetype.includes('gif');
+        
+        if (isAnimated) {
+            // --- MODO ANIMADO (Video/GIF) ---
+            console.log(`(Sticker) -> Convirtiendo video/gif a WebP...`);
+            try {
+                media = await convertToWebP(media);
+                // Usar client.sendMessage con opciones compatibles para maximizar compatibilidad
+                const opts = { sendMediaAsSticker: true, stickerAuthor: 'Botillero', stickerName: 'Botillero' };
+                try {
+                    await client.sendMessage(message.from, media, opts);
+                } catch (sendErr) {
+                    console.warn('(Sticker) -> client.sendMessage falló, intentando message.reply como fallback', sendErr && sendErr.message);
+                    // Fallback: intentar reply (algunas versiones usan stickerMetadata)
+                    await message.reply(media, undefined, { sendMediaAsSticker: true });
+                }
+            } catch (err) {
+                console.error("(Sticker) -> Error conversión:", err);
+                message.reply("❌ Error al procesar el video. Intenta con uno más corto.");
+            }
+        } else {
+            // --- MODO ESTÁTICO (Imagen) ---
+            // Intentar enviar con opciones compatibles (stickerAuthor/stickerName)
+            const opts = {
+                sendMediaAsSticker: true,
+                stickerAuthor: 'Botillero',
+                stickerName: 'Botillero'
+            };
+            try {
+                await client.sendMessage(message.from, media, opts);
+            } catch (err) {
+                console.warn('(Sticker) -> client.sendMessage falló en imagen, intentando reply con stickerMetadata', err && err.message);
+                try {
+                    await message.reply(media, undefined, {
+                        sendMediaAsSticker: true,
+                        stickerMetadata: {
+                            author: 'Botillero',
+                            pack: 'Botillero',
+                            name: 'Botillero'
+                        }
+                    });
+                } catch (err2) {
+                    console.error('(Sticker) -> Fallback reply también falló:', err2);
+                    message.reply('❌ No fue posible crear el sticker.');
+                }
+            }
+        }
+
+    } catch (e) {
+        console.error("(Sticker) -> Error:", e);
+        
+        // Fallback de emergencia: enviar como documento si falla el sticker
+        if (e.message && e.message.includes('endFailWithError')) {
+             message.reply("❌ WhatsApp rechazó el sticker (posiblemente por peso o duración).");
+        } else {
+            message.reply("❌ Hubo un error al crear el sticker.");
+        }
     }
 }
 

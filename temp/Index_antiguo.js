@@ -1115,51 +1115,7 @@ client.on('message', async message => {
 });
 
 
-/// Bencineras ///
-
-client.on('message', async msg => {
-  if (msg.body.startsWith('!bencina') || msg.body.startsWith('!Bencina')) {
-      const comuna = msg.body.substring(msg.body.indexOf(' ') + 1).trim(); // Obtener la comuna después del primer espacio
-      const python = spawn('python', [path.join(__dirname, 'bencina.py'), comuna]);
-      
-      msg.reply('Espere un momento... ⏳').then(() => {
-          msg.react('⌛');
-      });
-
-      python.on('error', (err) => {
-          console.error('Error al ejecutar el script de Python:', err);
-          msg.reply('Ocurrió un error al obtener los datos de bencina.');
-      });
-
-      python.on('close', (code) => {
-          console.log(`child process exited with code ${code}`);
-          if (code !== 0) {
-              msg.reply('Error al obtener los datos de bencina.');
-              msg.react('❌');
-              return;
-          }
-
-          const outputFile = path.join(__dirname, 'output.txt');
-          fs.readFile(outputFile, 'utf8', (err, data) => {
-              if (err) {
-                  console.error('Error al leer el archivo de salida:', err);
-                  msg.reply('Ocurrió un error al leer los datos de bencina.');
-                  msg.react('❌');
-                  return;
-              }
-
-              if (data.trim() === '') {
-                  msg.reply('No se encontraron datos para esa comuna, aweonao.');
-                  msg.react('❌');
-                  return;
-              }
-
-              msg.reply(data);
-              msg.react('✅');
-          });
-      });
-  }
-});
+// Bloque de bencina eliminado: la funcionalidad fue removida del proyecto.
 
 /// Audios ///
 

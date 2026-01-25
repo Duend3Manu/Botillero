@@ -4,9 +4,14 @@ import requests
 from bs4 import BeautifulSoup
 from unidecode import unidecode
 import io
+import os
 
 # Forzar la salida a UTF-8 para evitar UnicodeEncodeError en Windows
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+# Ruta de la carpeta de signos
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SIGNOS_DIR = os.path.join(SCRIPT_DIR, '..', '..', 'signos')
 
 # Diccionario de emojis para cada signo chino
 emojis_signos_chinos = {
@@ -14,6 +19,16 @@ emojis_signos_chinos = {
     "serpiente": "🐍", "caballo": "🐎", "cabra": "🐐", "mono": "🐒",
     "gallo": "🐓", "perro": "🐕", "cerdo": "🐖"
 }
+
+def obtener_ruta_imagen(signo):
+    """
+    Obtiene la ruta de la imagen del signo chino desde la carpeta local.
+    Retorna la ruta absoluta si existe, sino retorna "no_image".
+    """
+    imagen_path = os.path.join(SIGNOS_DIR, f"{signo}.jpeg")
+    if os.path.exists(imagen_path):
+        return os.path.abspath(imagen_path)
+    return "no_image"
 
 def obtener_horoscopo_chino(signo_buscar):
     url = "https://www.elhoroscopochino.com.ar/horoscopo-chino-de-hoy"
@@ -27,6 +42,7 @@ def obtener_horoscopo_chino(signo_buscar):
         
         for signo in signos_divs:
             nombre_signo_raw = signo.find("h3", class_="card-title").text.strip().split(" ")[0]
+            nombre_normalizado = unidecode(nombre_signo_raw.lower())
             
             # --- INICIO DEL CAMBIO ---
             p_tag = signo.find("p", class_="card-text")
@@ -38,9 +54,8 @@ def obtener_horoscopo_chino(signo_buscar):
             # Obtenemos el texto ya formateado
             descripcion = p_tag.get_text(strip=True)
             # --- FIN DEL CAMBIO ---
-            imagen_url = signo.find("img")["src"] if signo.find("img") else "no_image"
+            imagen_url = obtener_ruta_imagen(nombre_normalizado)
 
-            nombre_normalizado = unidecode(nombre_signo_raw.lower())
             datos_signos[nombre_normalizado] = {
                 "nombre_original": nombre_signo_raw,
                 "descripcion": descripcion,
