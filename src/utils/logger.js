@@ -14,26 +14,47 @@ const LOG_LEVELS = {
 const LOG_FILE = path.join(__dirname, '..', '..', 'bot.log');
 const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
 
+// Contador para optimizar las verificaciones de disco
+let writeCounter = 0;
+
 function formatMessage(level, message, ...args) {
     const timestamp = new Date().toISOString();
     const formattedArgs = args.length > 0 ? ' ' + JSON.stringify(args) : '';
     return `[${timestamp}] [${level}] ${message}${formattedArgs}\n`;
 }
 
-function writeToFile(message) {
-    try {
-        // Rotar log si es muy grande
-        if (fs.existsSync(LOG_FILE)) {
-            const stats = fs.statSync(LOG_FILE);
-            if (stats.size > MAX_LOG_SIZE) {
+function checkRotation() {
+    // Verificamos el tamaño de forma asíncrona
+    fs.stat(LOG_FILE, (err, stats) => {
+        if (err) return; // Si el archivo no existe, no hacemos nada
+
+        if (stats.size > MAX_LOG_SIZE) {
+            try {
+                // Rotación síncrona (bloqueante) pero segura, ocurre muy rara vez
                 fs.renameSync(LOG_FILE, `${LOG_FILE}.old`);
+            } catch (e) {
+                console.error('Error al rotar logs:', e.message);
             }
         }
-        fs.appendFileSync(LOG_FILE, message);
-    } catch (err) {
-        // Si falla escribir al archivo, solo mostrar en consola
-        console.error('Error al escribir en log file:', err.message);
+    });
+}
+
+function writeToFile(message) {
+    // 1. Optimización: Solo verificar rotación cada 50 escrituras
+    // Esto evita golpear el disco con fs.stat() en cada mensaje
+    writeCounter = (writeCounter + 1) % 50;
+    if (writeCounter === 0) {
+        checkRotation();
     }
+
+    // 2. Optimización: Escritura Asíncrona (Non-blocking)
+    // fs.appendFileSync bloqueaba el bot mientras escribía en disco.
+    // fs.appendFile lo hace en segundo plano.
+    fs.appendFile(LOG_FILE, message, (err) => {
+        if (err) {
+            console.error('Error crítico escribiendo en log:', err.message);
+        }
+    });
 }
 
 function log(level, message, ...args) {

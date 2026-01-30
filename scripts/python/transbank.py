@@ -1,28 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-Script mejorado para obtener estado de Transbank.
-Incluye caché persistente en archivo y manejo robusto de errores.
+Script optimizado para obtener estado de Transbank.
+Sin caché local (delegado a Node.js), con soporte de zona horaria y manejo de errores.
 """
 import sys
+import json
 import requests
 from bs4 import BeautifulSoup
 import io
-import json
-import os
-import time
-import argparse
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import tempfile
 
 # Configurar salida UTF-8
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # Configuración
 URL_TRANSBANK = 'https://status.transbankdevelopers.cl/'
-# Archivo de caché en carpeta temp del proyecto
-CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'temp', 'transbank_cache.json')
-CACHE_DURATION = 300  # 5 minutos
 # Requests session con reintentos
 SESSION = requests.Session()
 RETRY_STRAT = Retry(
@@ -34,51 +29,10 @@ RETRY_STRAT = Retry(
 ADAPTER = HTTPAdapter(max_retries=RETRY_STRAT)
 SESSION.mount("https://", ADAPTER)
 SESSION.mount("http://", ADAPTER)
-SESSION.headers.update({'User-Agent': 'Botillero/1.0'})
+SESSION.headers.update({'User-Agent': 'Botillero/2.0'})
 
-def load_cache():
-    """Carga datos del caché si es válido."""
-    if not os.path.exists(CACHE_FILE):
-        return None
-    try:
-        with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            # Verificar validez del tiempo
-            if time.time() - data.get('timestamp', 0) < CACHE_DURATION:
-                return data.get('payload')
-    except Exception:
-        return None
-    return None
-
-def save_cache(payload):
-    """Guarda datos en el caché."""
-    try:
-        os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
-        # Escribir de forma atómica
-        dirpath = os.path.dirname(CACHE_FILE)
-        fd, tmp_path = tempfile.mkstemp(dir=dirpath)
-        try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as tmpf:
-                json.dump({'timestamp': time.time(), 'payload': payload}, tmpf, ensure_ascii=False)
-            os.replace(tmp_path, CACHE_FILE)
-        finally:
-            if os.path.exists(tmp_path):
-                try:
-                    os.remove(tmp_path)
-                except Exception:
-                    pass
-    except Exception:
-        pass # Ignorar errores de escritura en caché
-
-def get_transbank_status(force_refresh=False):
-    """Obtiene el estado de los servicios (con caché)."""
-    # 1. Intentar cargar de caché
-    if not force_refresh:
-        cached_data = load_cache()
-        if cached_data:
-            return cached_data, True
-
-    # 2. Si no hay caché, hacer scraping usando Session con reintentos
+def get_transbank_status():
+    """Obtiene el estado de los servicios haciendo scraping."""
     try:
         response = SESSION.get(URL_TRANSBANK, timeout=10)
         response.raise_for_status()
@@ -87,11 +41,11 @@ def get_transbank_status(force_refresh=False):
         container = soup.find('div', class_='components-container')
 
         if not container:
-            return {'error': 'No se encontró el contenedor de servicios'}, False
+            raise Exception('No se encontró el contenedor de servicios')
 
         services = container.find_all('div', class_='component-inner-container')
         if not services:
-            return {'error': 'No se encontraron servicios listados'}, False
+            raise Exception('No se encontraron servicios listados')
 
         status_map = {}
         for service in services:
@@ -104,77 +58,58 @@ def get_transbank_status(force_refresh=False):
                 status_map[name] = status
 
         if not status_map:
-            return {'error': 'No se pudieron extraer los estados'}, False
+            raise Exception('No se pudieron extraer los estados')
 
-        # Guardar en caché
-        save_cache(status_map)
-        return status_map, False
+        return status_map
 
-    except requests.exceptions.Timeout:
-        return {'error': 'Timeout al conectar con Transbank'}, False
-    except requests.exceptions.RequestException as e:
-        return {'error': f'Error en la conexión: {str(e)}'}, False
     except Exception as e:
-        return {'error': f'Error: {str(e)}'}, False
+        raise e
 
 def main():
     try:
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--json', action='store_true', help='Output en formato JSON')
-        parser.add_argument('--force-refresh', action='store_true', help='Ignorar caché y forzar refresco')
-        args = parser.parse_args()
-
-        data, from_cache = get_transbank_status(force_refresh=args.force_refresh)
+        json_output = '--json' in sys.argv
+        data = get_transbank_status()
         
-        # Estructura de respuesta estandarizada
-        response = {
-            'success': 'error' not in data,
-            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'from_cache': from_cache,
-            'data': data
-        }
+        if json_output:
+            # Salida JSON pura para el monitoreo automático
+            print(json.dumps(data, ensure_ascii=False))
+            return
 
-        if args.json:
-            print(json.dumps(response, ensure_ascii=False, indent=2))
-        else:
-            # Formato texto para WhatsApp (sin caracteres problemáticos)
-            output = "*Estado de Servicios Transbank*\n\n"
+        # Formato texto para WhatsApp
+        output = "*Estado de Servicios Transbank*\n\n"
+        
+        # Normalizar estados comunes
+        for service, status in data.items():
+            normalized = {
+                'Operational': 'OK',
+                'Degraded Performance': 'WARN',
+                'Partial Outage': 'WARN',
+                'Major Outage': 'DOWN',
+                'Under Maintenance': 'MAINT',
+                'Investigating': 'WARN'
+            }.get(status, 'UNKNOWN')
             
-            if 'error' in data:
-                output += f"Error: {data['error']}"
-            else:
-                if not data:
-                    output += "No hay servicios listados o no se pudo conectar.\n"
-                else:
-                    # Normalizar estados comunes
-                    for service, status in data.items():
-                        normalized = {
-                            'Operational': 'OK',
-                            'Degraded Performance': 'WARN',
-                            'Partial Outage': 'WARN',
-                            'Major Outage': 'DOWN',
-                            'Under Maintenance': 'MAINT',
-                            'Investigating': 'WARN'
-                        }.get(status, 'UNKNOWN')
-                        # Emoji indicators: ✅ = ok, ❌ = down/problem, ⚠️ = warning, 🛠️ = maintenance, ❓ = unknown
-                        emoji_map = {
-                            'OK': '✅',
-                            'WARN': '⚠️',
-                            'DOWN': '❌',
-                            'MAINT': '🛠️',
-                            'UNKNOWN': '❓'
-                        }
-                        emoji = emoji_map.get(normalized, '❓')
-                        # Mostrar: [emoji] Nombre del servicio: estado original
-                        output += f"{emoji} {service}: {status}\n"
+            emoji_map = {
+                'OK': '✅',
+                'WARN': '⚠️',
+                'DOWN': '❌',
+                'MAINT': '🛠️',
+                'UNKNOWN': '❓'
+            }
+            emoji = emoji_map.get(normalized, '❓')
+            output += f"{emoji} {service}: {status}\n"
 
-                output += f"\nActualizado: {response['timestamp']}"
-            
-            print(output)
-            sys.stdout.flush()
+        # Fecha en hora de Chile
+        now_chile = datetime.now(ZoneInfo('America/Santiago'))
+        timestamp = now_chile.strftime('%Y-%m-%d %H:%M:%S')
+        output += f"\nActualizado: {timestamp}"
+        
+        print(output)
+        
     except Exception as e:
-        print(f"Error en main: {str(e)}")
-        sys.stdout.flush()
+        # Imprimir error en stderr y salir con código 1 para que Node.js lo detecte
+        print(f"Error: {str(e)}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

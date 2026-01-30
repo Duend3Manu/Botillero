@@ -3,11 +3,22 @@
 
 const axios = require('axios');
 
+// Variables para caché (evita consultar a la SEC en cada mensaje)
+let secDataCache = null;
+let lastUpdate = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos de caché
+
+const HEADERS = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (compatible; Botillero/2.0)' // Identificarse para evitar bloqueos
+};
+
 // Función para obtener la fecha y hora del servidor de la SEC
 async function getServerTime() {
     try {
         const response = await axios.post('https://apps.sec.cl/INTONLINEv1/ClientesAfectados/GetHoraServer', {}, {
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+            headers: HEADERS
         });
         const serverTime = response.data[0].FECHA;
         return parseDate(serverTime);
@@ -39,7 +50,7 @@ async function fetchData(timeData) {
         const response = await axios.post('https://apps.sec.cl/INTONLINEv1/ClientesAfectados/GetPorFecha', {
             anho, mes, dia, hora
         }, {
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+            headers: HEADERS
         });
         return response.data;
     } catch (error) {
@@ -48,14 +59,39 @@ async function fetchData(timeData) {
     }
 }
 
-// Función principal que construye el mensaje para WhatsApp
-async function generateWhatsAppMessage(regionFilter = null, highImpactThreshold = 1000) {
+// Función orquestadora con caché
+async function getSecData() {
+    // 1. Si tenemos datos recientes, los usamos
+    if (secDataCache && (Date.now() - lastUpdate < CACHE_TTL)) {
+        return secDataCache;
+    }
+
+    // 2. Si no, obtenemos hora y datos nuevos
     const timeData = await getServerTime();
-    if (!timeData) return 'Error al obtener la hora del servidor de la SEC.';
+    if (!timeData) return null;
 
     const data = await fetchData(timeData);
-    if (!data) return 'Error al obtener los datos de cortes de suministro.';
+    if (data) {
+        secDataCache = data;
+        lastUpdate = Date.now();
+    }
+    return data;
+}
 
+// Función principal que construye el mensaje para WhatsApp
+async function generateWhatsAppMessage(regionFilter = null, highImpactThreshold = 1000) {
+    const data = await getSecData();
+    
+    if (!data) {
+        // Si falla y tenemos caché antigua, podríamos usarla, pero por ahora retornamos error
+        if (secDataCache) return generateMessageFromData(secDataCache, regionFilter, highImpactThreshold) + "\n\n_(⚠️ Datos no actualizados)_";
+        return 'Error al obtener los datos de cortes de suministro de la SEC.';
+    }
+
+    return generateMessageFromData(data, regionFilter, highImpactThreshold);
+}
+
+function generateMessageFromData(data, regionFilter, highImpactThreshold) {
     const regionData = {};
     let totalAffected = 0;
 

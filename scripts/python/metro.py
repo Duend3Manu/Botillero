@@ -13,14 +13,13 @@ from datetime import datetime
 import io
 from zoneinfo import ZoneInfo
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 # Configurar la salida estándar para soportar UTF-8
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # --- CONFIGURACIÓN ---
 REQUEST_TIMEOUT = 8  # segundos (reducido de 10)
-CACHE_DURATION = 120  # segundos (2 minutos de caché)
-cache = {}
 
 # Mapeo de los íconos de la web a los nombres de las líneas
 LINE_ICONS = {
@@ -43,22 +42,6 @@ COLORS = {
     'Línea 5': '🟢',
     'Línea 6': '🟣'
 }
-
-# --- FUNCIONES DE CACHÉ ---
-
-def get_cached_or_fetch(cache_key, fetch_function):
-    """Obtiene del caché si está disponible, sino ejecuta la función."""
-    now = time.time()
-    if cache_key in cache:
-        cached_data, timestamp = cache[cache_key]
-        if now - timestamp < CACHE_DURATION:
-            return cached_data, True  # True = desde caché
-    
-    # No hay caché o expiró, obtener datos frescos
-    data = fetch_function()
-    cache[cache_key] = (data, now)
-    return data, False  # False = datos frescos
-
 
 # --- FUNCIONES DE SCRAPING ---
 
@@ -273,10 +256,15 @@ def main():
     json_output = '--json' in sys.argv
     
     try:
-        # Obtener datos con caché
-        telegram_data, _ = get_cached_or_fetch('telegram', get_latest_telegram_alert)
-        metro_data, _ = get_cached_or_fetch('metro', get_metro_cl_status)
-        metrotren_data, _ = get_cached_or_fetch('metrotren', get_metrotren_status)
+        # MEJORA: Ejecutar consultas en paralelo para reducir tiempo de espera
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            future_telegram = executor.submit(get_latest_telegram_alert)
+            future_metro = executor.submit(get_metro_cl_status)
+            future_metrotren = executor.submit(get_metrotren_status)
+
+            telegram_data = future_telegram.result()
+            metro_data = future_metro.result()
+            metrotren_data = future_metrotren.result()
         
         if json_output:
             # Output JSON para procesamiento programático

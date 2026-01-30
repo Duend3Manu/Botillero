@@ -20,6 +20,9 @@ options = webdriver.ChromeOptions()
 options.add_argument("--headless")
 options.add_argument("--disable-gpu")
 options.add_argument("--log-level=3")
+options.add_argument("--no-sandbox") # Crucial para VPS/Linux
+options.add_argument("--disable-dev-shm-usage") # Evita crashes por memoria compartida
+options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
 driver = None
@@ -41,7 +44,7 @@ try:
 except TimeoutException:
     print("Error: La página cargó, pero el contenedor 'a_sd' (lista de partidos) no apareció después de 10s.")
 except Exception as e:
-    print(f"Error durante la carga con Selenium: {e.msg}")
+    print(f"Error durante la carga con Selenium: {str(e)}")
 finally:
     if driver:
         driver.quit() 

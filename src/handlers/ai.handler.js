@@ -1,27 +1,64 @@
 // src/handlers/ai.handler.js
 "use strict";
 
+const axios = require('axios');
+const cheerio = require('cheerio');
 // --- Importamos servicios ---
-const { findCommandWithAI } = require('../services/ai.service');
+const { findCommandWithAI, generateSummary } = require('../services/ai.service');
 const rateLimiter = require('../services/rate-limiter.service');
 
+async function scrapeWeb(url) {
+    try {
+        const { data } = await axios.get(url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' },
+            timeout: 10000 // Timeout de 10 segundos para evitar bloqueos
+        });
+        const $ = cheerio.load(data);
+
+        // Limpieza básica
+        $('script, style, nav, header, footer, iframe, .ads, .comments').remove();
+
+        // Caso especial: YouTube (Solo metadatos por ahora)
+        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+            const title = $('meta[name="title"]').attr('content') || $('title').text();
+            const desc = $('meta[name="description"]').attr('content') || '';
+            return `CONTEXTO VIDEO YOUTUBE:\nTítulo: ${title}\nDescripción: ${desc}\n\n(Nota para la IA: Resume basándote en este título y descripción, indicando que es un video).`;
+        }
+
+        // Extraer texto de párrafos para artículos
+        let text = '';
+        $('article, p, h1, h2, h3, li').each((i, el) => {
+            const t = $(el).text().trim();
+            if (t.length > 20) text += t + '\n';
+        });
+
+        return text.substring(0, 20000); // Límite de caracteres para no saturar
+    } catch (error) {
+        console.error("Error scraping:", error.message);
+        return null;
+    }
+}
+
 async function handleAiHelp(message) {
-    const userQuery = message.body.substring(message.body.indexOf(' ') + 1).toLowerCase().trim();
+    // Detectar si hay un espacio para separar el comando del texto
+    const firstSpaceIndex = message.body.indexOf(' ');
+    const userQuery = (firstSpaceIndex !== -1) 
+        ? message.body.substring(firstSpaceIndex + 1).toLowerCase().trim() 
+        : '';
 
     if (!userQuery || userQuery === 'ayuda' || userQuery === 'help') {
         return "¡Wena compa! Soy Botillero. Dime qué necesitas hacer y te ayudaré a encontrar el comando correcto. 🤖\n\nPor ejemplo: `!ayuda quiero saber el clima en valparaíso`";
     }
 
     // Verificación del cooldown global
-    const cooldown = rateLimiter.checkCooldown();
-    if (!cooldown.canMakeRequest) {
-        return rateLimiter.getCooldownMessage(cooldown.timeLeft);
+    const limit = rateLimiter.tryAcquire();
+    if (!limit.success) {
+        return rateLimiter.getCooldownMessage(limit.timeLeft);
     }
 
     try {
         // Llamamos a la IA para que nos dé la respuesta
         const aiResponse = await findCommandWithAI(userQuery);
-        rateLimiter.updateLastRequest(); // Actualizamos el timestamp solo si la llamada fue exitosa
         return aiResponse;
     } catch (error) {
         console.error("Error al contactar la IA de Google:", error);
@@ -29,6 +66,39 @@ async function handleAiHelp(message) {
     }
 }
 
+async function handleSummary(message) {
+    // Buscar la primera URL válida en el mensaje usando Regex
+    const urlMatch = message.body.match(/(https?:\/\/[^\s]+)/);
+    const url = urlMatch ? urlMatch[0] : null;
+    
+    if (!url) {
+        return "Por favor, envía una URL válida después del comando. Ejemplo: `!resumen https://noticia.com/articulo`";
+    }
+
+    // Rate Limiter (Compartido con !ayuda para proteger la cuota)
+    const limit = rateLimiter.tryAcquire();
+    if (!limit.success) {
+        return rateLimiter.getCooldownMessage(limit.timeLeft);
+    }
+
+    await message.react('👀'); // Reacción de "leyendo"
+
+    try {
+        const textContent = await scrapeWeb(url);
+        if (!textContent || textContent.length < 50) {
+            return "No pude leer el contenido de esa página. Puede que esté protegida o sea inaccesible.";
+        }
+
+        const summary = await generateSummary(textContent);
+        return `📝 *Resumen IA:*\n\n${summary}`;
+    } catch (error) {
+        await message.react('❌'); // Indicar error visualmente
+        console.error("Error en handleSummary:", error);
+        return "Ocurrió un error al intentar resumir el contenido.";
+    }
+}
+
 module.exports = {
-    handleAiHelp
+    handleAiHelp,
+    handleSummary
 };

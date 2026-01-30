@@ -1,8 +1,11 @@
 {
+  "name": "botillero",
+  "version": "2.0.0",
   "type": "commonjs",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "axios": "^1.12.2",
+    "better-sqlite3": "^12.6.2",
     "cheerio": "^1.1.2",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
@@ -10,9 +13,9 @@
     "form-data": "^4.0.0",
     "google-it": "^1.6.4",
     "moment-timezone": "^0.6.0",
-    "puppeteer": "^24.24.0",
+    "puppeteer-core": "^24.24.0",
     "qrcode-terminal": "^0.12.0",
-    "sqlite3": "^5.1.7",
+    "sqlite3": "^5.0.2",
     "systeminformation": "^5.27.11",
     "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main",
     "whois": "^2.0.5"

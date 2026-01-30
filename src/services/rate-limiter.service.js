@@ -5,30 +5,25 @@
  */
 "use strict";
 
-const AI_COOLDOWN_SECONDS = 7; // 7 segundos entre peticiones a IA
+const AI_COOLDOWN_SECONDS = 10; // Subimos a 10s para ser más seguros con la cuota gratuita
 let lastAiRequestTimestamp = 0;
 
 /**
- * Verifica si hay que esperar antes de hacer una petición a IA
- * @returns {Object} { canMakeRequest: boolean, timeLeft: number }
+ * Intenta adquirir permiso para usar la IA.
+ * Si tiene éxito, actualiza el timestamp INMEDIATAMENTE (evita condiciones de carrera).
+ * @returns {Object} { success: boolean, timeLeft: number }
  */
-function checkCooldown() {
+function tryAcquire() {
     const now = Date.now();
     const timeSinceLastRequest = (now - lastAiRequestTimestamp) / 1000;
 
     if (timeSinceLastRequest < AI_COOLDOWN_SECONDS) {
         const timeLeft = Math.ceil(AI_COOLDOWN_SECONDS - timeSinceLastRequest);
-        return { canMakeRequest: false, timeLeft };
+        return { success: false, timeLeft };
     }
 
-    return { canMakeRequest: true, timeLeft: 0 };
-}
-
-/**
- * Actualiza el timestamp de la última petición exitosa a IA
- */
-function updateLastRequest() {
-    lastAiRequestTimestamp = Date.now();
+    lastAiRequestTimestamp = now; // 🔒 Bloqueo inmediato
+    return { success: true, timeLeft: 0 };
 }
 
 /**
@@ -41,8 +36,7 @@ function getCooldownMessage(timeLeft) {
 }
 
 module.exports = {
-    checkCooldown,
-    updateLastRequest,
+    tryAcquire,
     getCooldownMessage,
     AI_COOLDOWN_SECONDS
 };

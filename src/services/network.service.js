@@ -1,32 +1,20 @@
 // src/services/network.service.js
 "use strict";
 
-const path = require('path');
-const { spawn } = require('child_process');
+const pythonService = require('./python.service');
 
-const SCRIPTS_PATH = path.join(__dirname, '..', '..', 'scripts', 'python');
-const PYTHON_EXECUTABLE = 'python';
-
-function analyzeDomain(domain) {
-    return new Promise((resolve, reject) => {
-        const scriptPath = path.join(SCRIPTS_PATH, 'net_analyzer.py');
-        const pythonProcess = spawn(PYTHON_EXECUTABLE, ['-u', scriptPath, domain]);
-
-        let output = '';
-        let errorOutput = '';
-
-        pythonProcess.stdout.on('data', (data) => { output += data.toString(); });
-        pythonProcess.stderr.on('data', (data) => { errorOutput += data.toString(); });
-
-        pythonProcess.on('close', (code) => {
-            if (code !== 0) {
-                console.error(`Error al ejecutar net_analyzer.py:`, errorOutput);
-                reject(new Error('El script de análisis de red falló.'));
-            } else {
-                resolve(output.trim());
-            }
-        });
-    });
+async function analyzeDomain(domain) {
+    try {
+        const result = await pythonService.executeScript('net_analyzer.py', [domain]);
+        
+        if (result.code !== 0) {
+            throw new Error(result.stderr || 'Error en el análisis de red.');
+        }
+        return result.stdout;
+    } catch (error) {
+        console.error("Error en analyzeDomain:", error.message);
+        throw error;
+    }
 }
 
 module.exports = {

@@ -18,7 +18,8 @@ function executeScript(scriptName, args = [], opts = {}) {
         const pythonExec = opts.pythonExec || PYTHON_COMMAND;
         const scriptPath = path.join(__dirname, '..', '..', 'scripts', 'python', scriptName);
         
-        const proc = spawn(pythonExec, [scriptPath, ...args], { 
+        // Agregamos '-u' para forzar salida sin buffer (importante para logs en tiempo real y evitar cortes)
+        const proc = spawn(pythonExec, ['-u', scriptPath, ...args], { 
             windowsHide: true,
             timeout: opts.timeout || 30000 // 30 segundos por defecto
         });
@@ -34,9 +35,12 @@ function executeScript(scriptName, args = [], opts = {}) {
             return reject(new Error(`Python spawn error: ${err.message}`));
         });
 
-        proc.on('close', (code) => {
-            if (code !== 0 && stderr) {
-                console.error(`Error en script Python (${scriptName}): ${stderr}`);
+        proc.on('close', (code, signal) => {
+            // Si code es null, fue matado por señal (ej: timeout)
+            const finalCode = code !== null ? code : (signal ? 1 : 0);
+
+            if (finalCode !== 0 && stderr) {
+                console.error(`Error en script Python (${scriptName}) [Code: ${finalCode}, Signal: ${signal}]: ${stderr}`);
             }
 
             // Intentar parsear JSON si el script devuelve JSON
@@ -48,7 +52,7 @@ function executeScript(scriptName, args = [], opts = {}) {
             }
 
             resolve({
-                code,
+                code: finalCode,
                 stdout: stdout.trim(),
                 stderr: stderr.trim(),
                 json: parsed

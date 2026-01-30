@@ -1,62 +1,86 @@
 // src/services/league.service.js (VERSIÓN FINAL Y CORRECTA)
 "use strict";
 
-const path = require('path');
-const { spawn } = require('child_process');
+const pythonService = require('./python.service');
 
-// Ruta a la carpeta donde guardas tus scripts de Python
-const SCRIPTS_PATH = path.join(__dirname, '..', '..', 'scripts', 'python');
-// Comando para ejecutar Python (usualmente 'python' o 'python3')
-const PYTHON_EXECUTABLE = 'python'; 
+// Variables para caché
+let tableCache = null;
+let lastTableUpdate = 0;
 
-/**
- * Función genérica para ejecutar cualquier script de Python y devolver su salida.
- * @param {string} scriptName El nombre del archivo .py a ejecutar.
- * @returns {Promise<string>} La salida del script.
- */
-function executePythonScript(scriptName) {
-    return new Promise((resolve, reject) => {
-        const scriptPath = path.join(SCRIPTS_PATH, scriptName);
-        const pythonProcess = spawn(PYTHON_EXECUTABLE, ['-u', scriptPath]);
+let upcomingCache = null;
+let lastUpcomingUpdate = 0;
 
-        let output = '';
-        let errorOutput = '';
+let summaryCache = null;
+let lastSummaryUpdate = 0;
 
-        pythonProcess.stdout.on('data', (data) => {
-            output += data.toString();
-        });
-
-        pythonProcess.stderr.on('data', (data) => {
-            errorOutput += data.toString();
-        });
-
-        pythonProcess.on('close', (code) => {
-            if (code !== 0) {
-                console.error(`Error al ejecutar el script ${scriptName}:`, errorOutput);
-                reject(new Error(`El script de Python (${scriptName}) finalizó con errores.`));
-            } else {
-                resolve(output.trim());
-            }
-        });
-    });
-}
+const LIVE_DATA_TTL = 60 * 1000; // 1 minuto (Tablas y partidos en vivo)
+const STATIC_DATA_TTL = 60 * 60 * 1000; // 1 hora (Próximos partidos)
 
 // --- Funciones para cada comando de fútbol ---
 
 async function getLeagueTable() {
-    console.log(`(Servicio) -> Ejecutando tabla.py...`);
-    return await executePythonScript('tabla.py');
+    if (tableCache && (Date.now() - lastTableUpdate < LIVE_DATA_TTL)) {
+        return tableCache;
+    }
+
+    try {
+        console.log(`(Servicio Liga) -> Ejecutando tabla.py...`);
+        const result = await pythonService.executeScript('tabla.py');
+        if (result.code !== 0) {
+            throw new Error(result.stderr || 'Error al ejecutar tabla.py');
+        }
+        tableCache = result.stdout;
+        lastTableUpdate = Date.now();
+        return result.stdout;
+    } catch (error) {
+        console.error("Error en getLeagueTable:", error.message);
+        if (tableCache) return `${tableCache}\n\n_(⚠️ Datos antiguos, error al actualizar)_`;
+        return "No pude obtener la tabla de la liga.";
+    }
 }
 
 async function getLeagueUpcomingMatches() {
-    console.log(`(Servicio) -> Ejecutando proxpar.py...`);
-    return await executePythonScript('proxpar.py');
+    if (upcomingCache && (Date.now() - lastUpcomingUpdate < STATIC_DATA_TTL)) {
+        return upcomingCache;
+    }
+
+    try {
+        console.log(`(Servicio Liga) -> Ejecutando proxpar.py...`);
+        // Aumentamos el timeout a 60s porque Selenium puede ser lento
+        const result = await pythonService.executeScript('proxpar.py', [], { timeout: 60000 });
+        if (result.code !== 0) {
+            throw new Error(result.stderr || 'Error al ejecutar proxpar.py');
+        }
+        upcomingCache = result.stdout;
+        lastUpcomingUpdate = Date.now();
+        return result.stdout;
+    } catch (error) {
+        console.error("Error en getLeagueUpcomingMatches:", error.message);
+        if (upcomingCache) return `${upcomingCache}\n\n_(⚠️ Datos antiguos, error al actualizar)_`;
+        return "No pude obtener los próximos partidos.";
+    }
 }
 
 // --- NUEVA FUNCIÓN PARA !partidos ---
 async function getMatchDaySummary() {
-    console.log(`(Servicio) -> Ejecutando partidos.py...`);
-    return await executePythonScript('partidos.py');
+    if (summaryCache && (Date.now() - lastSummaryUpdate < LIVE_DATA_TTL)) {
+        return summaryCache;
+    }
+
+    try {
+        console.log(`(Servicio Liga) -> Ejecutando partidos.py...`);
+        const result = await pythonService.executeScript('partidos.py');
+        if (result.code !== 0) {
+            throw new Error(result.stderr || 'Error al ejecutar partidos.py');
+        }
+        summaryCache = result.stdout;
+        lastSummaryUpdate = Date.now();
+        return result.stdout;
+    } catch (error) {
+        console.error("Error en getMatchDaySummary:", error.message);
+        if (summaryCache) return `${summaryCache}\n\n_(⚠️ Datos antiguos, error al actualizar)_`;
+        return "No pude obtener el resumen de la fecha.";
+    }
 }
 
 module.exports = {

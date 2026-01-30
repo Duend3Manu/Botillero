@@ -4,15 +4,18 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const GoogleIt = require('google-it');
-const { getPatenteDataFormatted } = require('../utils/apiService');
+const { MessageMedia } = require('../adapters/wwebjs-adapter');
 
 async function handleWikiSearch(message) {
-    const searchTerm = message.body.substring(message.body.indexOf(' ') + 1).trim();
+    // 1. Extracción robusta con Regex
+    const searchTerm = message.body.replace(/^([!/])wiki\s*/i, '').trim();
+
     if (!searchTerm) {
         return "Por favor, escribe un término para buscar en Wikipedia. Ejemplo: `!wiki Chile`";
     }
 
     try {
+        await message.react('⏳');
         const response = await axios.get('https://es.wikipedia.org/w/api.php', {
             params: {
                 action: 'query',
@@ -25,6 +28,7 @@ async function handleWikiSearch(message) {
         });
 
         if (response.data.query.search.length === 0) {
+            await message.react('❌');
             return `No se encontraron resultados en Wikipedia para "${searchTerm}".`;
         }
 
@@ -37,16 +41,46 @@ async function handleWikiSearch(message) {
             replyMessage += `_${cleanSnippet}..._\n`;
             replyMessage += `${articleLink}\n\n`;
         }
+        
+        // Intentar obtener la imagen del primer resultado para enviarla con el texto
+        try {
+            const firstTitle = response.data.query.search[0].title;
+            const imageResponse = await axios.get('https://es.wikipedia.org/w/api.php', {
+                params: {
+                    action: 'query',
+                    prop: 'pageimages',
+                    titles: firstTitle,
+                    pithumbsize: 600, // Tamaño de la imagen
+                    format: 'json'
+                }
+            });
+
+            const pages = imageResponse.data.query.pages;
+            const pageId = Object.keys(pages)[0];
+            
+            if (pages[pageId].thumbnail && pages[pageId].thumbnail.source) {
+                const media = await MessageMedia.fromUrl(pages[pageId].thumbnail.source);
+                await message.reply(media, undefined, { caption: replyMessage });
+                await message.react('✅');
+                return null; // Retornamos null para que command.handler no envíe el texto duplicado
+            }
+        } catch (imgError) {
+            console.error('Error al obtener imagen de Wikipedia:', imgError);
+        }
+
+        await message.react('✅');
         return replyMessage;
 
     } catch (error) {
         console.error('Error en la búsqueda de Wikipedia:', error);
+        await message.react('❌');
         return 'Ocurrió un error al buscar en Wikipedia.';
     }
 }
 
 async function handleNews(message) {
     try {
+        await message.react('⏳');
         const response = await axios.get('http://chile.infoflow.cloud/p.php/infoflow2017/noticias-nacionales');
         const html = response.data;
         const $ = cheerio.load(html);
@@ -55,26 +89,32 @@ async function handleNews(message) {
         newsText = newsText.replace(/editor-card/g, '');
         newsText = newsText.replace(/\n\s*\n/g, '\n\n');
 
+        await message.react('📰');
         return "📰 *Noticias Nacionales - Última Hora:*\n\n" + newsText;
     } catch (error) {
         console.error('Error al obtener las noticias:', error);
+        await message.react('❌');
         return 'Lo siento, no pude obtener las noticias en este momento.';
     }
 }
 
 async function handleGoogleSearch(message) {
-    const searchTerm = message.body.substring(message.body.indexOf(' ') + 1).trim();
+    // 1. Extracción robusta con Regex
+    const searchTerm = message.body.replace(/^([!/])g\s*/i, '').trim();
+
     if (!searchTerm) {
         return "Escribe algo para buscar en Google. Ejemplo: `!g gatitos`";
     }
     
     try {
+        await message.react('⏳');
         const results = await GoogleIt({ query: searchTerm });
         
         // --- INICIO DE LA MEJORA ---
         // 1. Verificamos si la respuesta es válida y tiene resultados.
         if (!results || results.length === 0) {
             console.log("La librería google-it no devolvió resultados para:", searchTerm);
+            await message.react('❌');
             return `No se encontraron resultados en Google para *"${searchTerm}"*.`;
         }
         // --- FIN DE LA MEJORA ---
@@ -85,26 +125,17 @@ async function handleGoogleSearch(message) {
             response += `_${result.snippet}_\n`;
             response += `${result.link}\n\n`;
         });
+        await message.react('✅');
         return response;
     } catch (error) {
         console.error("Error en búsqueda de Google:", error);
+        await message.react('❌');
         return "Hubo un error al buscar en Google.";
     }
-}
-
-async function handlePatenteSearch(message) {
-    const patente = message.body.substring(message.body.indexOf(' ') + 1).trim();
-    if (!patente) {
-        return "Debes ingresar una patente. Ejemplo: `!pat aabb12`";
-    }
-
-    const result = await getPatenteDataFormatted(patente);
-    return result.error ? result.message : result.data;
 }
 
 module.exports = {
     handleWikiSearch,
     handleNews,
-    handleGoogleSearch,
-    handlePatenteSearch
+    handleGoogleSearch
 };

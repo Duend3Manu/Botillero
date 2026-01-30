@@ -6,25 +6,24 @@ from unidecode import unidecode
 import io
 import os
 
-# Forzar la salida a UTF-8 para evitar UnicodeEncodeError en Windows
+# Forzar la salida a UTF-8
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # Ruta de la carpeta de signos
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SIGNOS_DIR = os.path.join(SCRIPT_DIR, '..', '..', 'signos')
 
-# Diccionario de emojis para cada signo chino
 emojis_signos_chinos = {
     "rata": "🐀", "buey": "🐂", "tigre": "🐅", "conejo": "🐇", "dragon": "🐉",
     "serpiente": "🐍", "caballo": "🐎", "cabra": "🐐", "mono": "🐒",
     "gallo": "🐓", "perro": "🐕", "cerdo": "🐖"
 }
 
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+}
+
 def obtener_ruta_imagen(signo):
-    """
-    Obtiene la ruta de la imagen del signo chino desde la carpeta local.
-    Retorna la ruta absoluta si existe, sino retorna "no_image".
-    """
     imagen_path = os.path.join(SIGNOS_DIR, f"{signo}.jpeg")
     if os.path.exists(imagen_path):
         return os.path.abspath(imagen_path)
@@ -33,43 +32,53 @@ def obtener_ruta_imagen(signo):
 def obtener_horoscopo_chino(signo_buscar):
     url = "https://www.elhoroscopochino.com.ar/horoscopo-chino-de-hoy"
     try:
-        response = requests.get(url)
+        response = requests.get(url, headers=HEADERS, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, "html.parser")
         
-        signos_divs = soup.find_all("div", class_="card-body")
         datos_signos = {}
         
-        for signo in signos_divs:
-            nombre_signo_raw = signo.find("h3", class_="card-title").text.strip().split(" ")[0]
-            nombre_normalizado = unidecode(nombre_signo_raw.lower())
+        # Buscar todos los divs que contienen "card-body" en su clase
+        # No usar class_="card-body" exacto ya que tiene más clases
+        card_divs = soup.find_all("div", class_=lambda x: x and "card-body" in x)
+        
+        for card in card_divs:
+            # Buscar el h2 dentro del card
+            h2_tag = card.find("h2")
+            if not h2_tag:
+                continue
             
-            # --- INICIO DEL CAMBIO ---
-            p_tag = signo.find("p", class_="card-text")
+            texto_h2 = h2_tag.get_text(strip=True).upper()
             
-            # Reemplazamos las etiquetas <br> por saltos de línea dobles para crear párrafos
-            for br in p_tag.find_all("br"):
-                br.replace_with("\n\n")
-            
-            # Obtenemos el texto ya formateado
-            descripcion = p_tag.get_text(strip=True)
-            # --- FIN DEL CAMBIO ---
-            imagen_url = obtener_ruta_imagen(nombre_normalizado)
-
-            datos_signos[nombre_normalizado] = {
-                "nombre_original": nombre_signo_raw,
-                "descripcion": descripcion,
-                "imagen": imagen_url
-            }
-
-        signo_normalizado_buscar = unidecode(signo_buscar.lower())
-        if signo_normalizado_buscar in datos_signos:
-            return datos_signos[signo_normalizado_buscar]
+            # Buscar cuál signo es
+            for signo, emoji in emojis_signos_chinos.items():
+                if signo.upper() in texto_h2 and 'HOY' in texto_h2:
+                    # Buscar el párrafo con la descripción
+                    p_tag = card.find("p", class_=lambda x: x and "mb-3" in x if x else False)
+                    
+                    if p_tag:
+                        descripcion = p_tag.get_text(strip=True)
+                        
+                        datos_signos[signo] = {
+                            "nombre_original": signo.capitalize(),
+                            "descripcion": descripcion,
+                            "imagen": obtener_ruta_imagen(signo)
+                        }
+                    break
+        
+        # Buscar el signo solicitado
+        signo_normalizado = unidecode(signo_buscar.lower())
+        if signo_normalizado in datos_signos:
+            return datos_signos[signo_normalizado]
         else:
-            return "Signo no encontrado."
+            if datos_signos:
+                return f"Signo '{signo_normalizado}' no encontrado. Disponibles: {', '.join(datos_signos.keys())}"
+            else:
+                return "No se pudieron encontrar horóscopos en la página."
             
     except Exception as e:
-        return f"Error al obtener o procesar el horóscopo chino: {e}"
+        import traceback
+        return f"Error: {str(e)}\n{traceback.format_exc()}"
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
@@ -79,12 +88,10 @@ if __name__ == "__main__":
         horoscopo = obtener_horoscopo_chino(signo)
 
         if isinstance(horoscopo, dict):
-            signo_normalizado = unidecode(signo.lower())
-            emoji = emojis_signos_chinos.get(signo_normalizado, "🧧")
+            signo_norm = unidecode(signo.lower())
+            emoji = emojis_signos_chinos.get(signo_norm, "🧧")
             
-            print(f"*{horoscopo['nombre_original'].capitalize()}* {emoji}\n")
-            # La descripción ahora se imprimirá con los párrafos que extrajimos
+            print(f"*{horoscopo['nombre_original']}* {emoji}\n")
             print(f"_{horoscopo['descripcion']}_")
-            print(f"🖼️ {horoscopo['imagen']}") # Añadimos la URL de la imagen al final
         else:
             print(horoscopo)

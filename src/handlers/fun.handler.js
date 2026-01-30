@@ -5,162 +5,112 @@ const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
 const ffmpeg = require('fluent-ffmpeg');
-const { MessageMedia } = require('whatsapp-web.js');
-
-// --- Configuración de FFmpeg (Vital para stickers animados) ---
-// Definimos la ruta explícita para asegurar que el "códec" funcione
-const ffmpegPath = 'C:\\FFmpeg\\bin\\ffmpeg.exe';
-
-if (fs.existsSync(ffmpegPath)) {
-    ffmpeg.setFfmpegPath(ffmpegPath);
-
-    // whatsapp-web.js busca ffmpeg en el PATH del sistema. Lo agregamos temporalmente.
-    if (process.platform === 'win32') {
-        const ffmpegDir = path.dirname(ffmpegPath);
-        if (!process.env.PATH.includes(ffmpegDir)) {
-            process.env.PATH += `;${ffmpegDir}`;
-            console.log(`(System) -> FFmpeg agregado al PATH para stickers animados.`);
-        }
-    }
-} else {
-    console.warn(`(System) -> ⚠️ ADVERTENCIA: No se encontró FFmpeg en "${ffmpegPath}". Los stickers animados no funcionarán.`);
-}
-
-// --- Función Auxiliar: Conversión Manual a WebP ---
-// Convierte videos/GIFs a WebP animado optimizado para WhatsApp
-async function convertToWebP(media) {
-    return new Promise((resolve, reject) => {
-        const tempDir = path.join(__dirname, '../../temp');
-        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-
-        const ext = media.mimetype.split('/')[1].split(';')[0] || 'dat';
-        const inputPath = path.join(tempDir, `sticker_in_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`);
-        const outputPath = path.join(tempDir, `sticker_out_${Date.now()}_${Math.random().toString(36).substring(7)}.webp`);
-
-        fs.writeFileSync(inputPath, media.data, 'base64');
-
-        ffmpeg(inputPath)
-            .inputOptions(['-t 6']) // Máximo 6 segundos
-            .outputOptions([
-                '-vcodec', 'libwebp',
-                '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,fps=12,pad=512:512:-1:-1:color=white@0.0,split[a][b];[a]palettegen[p];[b][p]paletteuse',
-                '-loop', '0',
-                '-an', // Sin audio
-                '-preset', 'default',
-                '-q:v', '40', // Calidad media/baja para reducir peso
-                '-lossless', '0'
-            ])
-            .save(outputPath)
-            .on('end', () => {
-                try {
-                    const webpData = fs.readFileSync(outputPath, 'base64');
-                    const newMedia = new MessageMedia('image/webp', webpData, 'sticker.webp');
-                    fs.unlinkSync(inputPath);
-                    fs.unlinkSync(outputPath);
-                    resolve(newMedia);
-                } catch (e) { reject(e); }
-            })
-            .on('error', (err) => {
-                if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-                if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-                reject(err);
-            });
-    });
-}
+const { MessageMedia } = require('../adapters/wwebjs-adapter');
 
 // --- Lógica para Stickers ---
 async function handleSticker(client, message) {
     try {
+        // Feedback visual inmediato
+        try { await message.react('⏳'); } catch (e) {}
+
         let mediaMessage = message;
-        
-        // 1. Si el mensaje no tiene media, revisamos si cita a uno
-        if (!message.hasMedia) {
-            if (message.hasQuotedMsg) {
-                const quotedMsg = await message.getQuotedMessage();
-                if (quotedMsg.hasMedia) {
-                    mediaMessage = quotedMsg;
-                }
-            } else {
-                // Si no cita nada, buscamos el último mensaje con media en el chat (historial)
-                const chat = await message.getChat();
-                const messages = await chat.fetchMessages({ limit: 10 });
-                const lastMedia = messages.reverse().find(msg => msg.hasMedia && (msg.type === 'video' || msg.type === 'gif' || msg.type === 'image'));
-                if (lastMedia) {
-                    mediaMessage = lastMedia;
-                }
-            }
+
+        // si no tiene media, revisa si responde a una
+        if (!message.hasMedia && message.hasQuotedMsg) {
+            const quoted = await message.getQuotedMessage();
+            if (quoted.hasMedia) mediaMessage = quoted;
         }
 
-        // 2. Validación final
-        if (!mediaMessage.hasMedia || !['video', 'gif', 'image'].includes(mediaMessage.type)) {
-            return message.reply('❌ Por favor, envía o responde a una imagen, video o GIF con el comando `!s`.');
+        if (!mediaMessage.hasMedia) {
+            return message.reply('❌ Responde a una imagen, gif o video con `!s`');
         }
 
-        console.log(`(Sticker) -> Procesando mensaje tipo: ${mediaMessage.type}`);
-        let media = await mediaMessage.downloadMedia();
-        
-        if (!media) {
-            return message.reply("❌ No se pudo descargar el archivo.");
-        }
+        console.log(`(Sticker) -> Procesando tipo: ${mediaMessage.type}`);
 
-        // 3. Procesamiento según tipo
+        const media = await mediaMessage.downloadMedia();
+        if (!media) return message.reply('❌ No se pudo descargar la media');
+
+        const tempDir = path.join(__dirname, '..', '..', 'temp');
+        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+        const ext = media.mimetype.split('/')[1].split(';')[0];
+        const timestamp = Date.now();
+        const tempFilePath = path.join(tempDir, `sticker_in_${timestamp}.${ext}`);
+        const outputFilePath = path.join(tempDir, `sticker_out_${timestamp}.webp`);
+
+        fs.writeFileSync(tempFilePath, media.data, 'base64');
+
         const isAnimated = media.mimetype.includes('video') || media.mimetype.includes('gif');
-        
-        if (isAnimated) {
-            // --- MODO ANIMADO (Video/GIF) ---
-            console.log(`(Sticker) -> Convirtiendo video/gif a WebP...`);
-            try {
-                media = await convertToWebP(media);
-                // Usar client.sendMessage con opciones compatibles para maximizar compatibilidad
-                const opts = { sendMediaAsSticker: true, stickerAuthor: 'Botillero', stickerName: 'Botillero' };
-                try {
-                    await client.sendMessage(message.from, media, opts);
-                } catch (sendErr) {
-                    console.warn('(Sticker) -> client.sendMessage falló, intentando message.reply como fallback', sendErr && sendErr.message);
-                    // Fallback: intentar reply (algunas versiones usan stickerMetadata)
-                    await message.reply(media, undefined, { sendMediaAsSticker: true });
-                }
-            } catch (err) {
-                console.error("(Sticker) -> Error conversión:", err);
-                message.reply("❌ Error al procesar el video. Intenta con uno más corto.");
+
+        await new Promise((resolve, reject) => {
+            const command = ffmpeg(tempFilePath)
+                .on('error', (err) => reject(err))
+                .on('end', () => resolve());
+
+            if (isAnimated) {
+                // Configuración SIMPLIFICADA para animados
+                command
+                    .inputOptions(['-t 6'])  // Máximo 6 segundos
+                    .outputOptions([
+                        '-vcodec libwebp',
+                        '-vf scale=512:512:force_original_aspect_ratio=decrease,fps=10',  // Simplificado
+                        '-loop 0',
+                        '-preset default',
+                        '-an',  // Sin audio
+                        '-vsync 0'
+                    ])
+                    .toFormat('webp');
+            } else {
+                // Configuración SIMPLE para estáticos
+                command
+                    .outputOptions([
+                        '-vcodec libwebp',
+                        '-vf scale=512:512:force_original_aspect_ratio=decrease',
+                        '-qscale 75'
+                    ])
+                    .toFormat('webp');
             }
-        } else {
-            // --- MODO ESTÁTICO (Imagen) ---
-            // Intentar enviar con opciones compatibles (stickerAuthor/stickerName)
-            const opts = {
-                sendMediaAsSticker: true,
-                stickerAuthor: 'Botillero',
-                stickerName: 'Botillero'
-            };
-            try {
-                await client.sendMessage(message.from, media, opts);
-            } catch (err) {
-                console.warn('(Sticker) -> client.sendMessage falló en imagen, intentando reply con stickerMetadata', err && err.message);
-                try {
-                    await message.reply(media, undefined, {
-                        sendMediaAsSticker: true,
-                        stickerMetadata: {
-                            author: 'Botillero',
-                            pack: 'Botillero',
-                            name: 'Botillero'
-                        }
-                    });
-                } catch (err2) {
-                    console.error('(Sticker) -> Fallback reply también falló:', err2);
-                    message.reply('❌ No fue posible crear el sticker.');
-                }
-            }
+            
+            command.save(outputFilePath);
+        });
+
+        // Validar que el archivo se generó correctamente
+        if (!fs.existsSync(outputFilePath)) {
+            throw new Error('No se generó el archivo WebP');
         }
 
-    } catch (e) {
-        console.error("(Sticker) -> Error:", e);
-        
-        // Fallback de emergencia: enviar como documento si falla el sticker
-        if (e.message && e.message.includes('endFailWithError')) {
-             message.reply("❌ WhatsApp rechazó el sticker (posiblemente por peso o duración).");
-        } else {
-            message.reply("❌ Hubo un error al crear el sticker.");
+        const stats = fs.statSync(outputFilePath);
+        console.log(`(Sticker) -> WebP generado: ${(stats.size / 1024).toFixed(2)} KB`);
+
+        // Validar tamaño (WhatsApp tiene límite de ~500KB para stickers)
+        if (stats.size > 500 * 1024) {
+            fs.unlinkSync(tempFilePath);
+            fs.unlinkSync(outputFilePath);
+            return message.reply('❌ El sticker es muy grande (>500KB). Usa un video/gif más corto.');
         }
+
+        const webpMedia = MessageMedia.fromFilePath(outputFilePath);
+        
+        // Enviar como sticker
+        await client.sendMessage(message.from, webpMedia, {
+            sendMediaAsSticker: true,
+            stickerName: 'Botillero',
+            stickerAuthor: '🤖'
+        });
+
+        // Reacción de éxito
+        try { await message.react('✅'); } catch (e) {}
+
+        // Limpieza
+        try {
+            fs.unlinkSync(tempFilePath);
+            fs.unlinkSync(outputFilePath);
+        } catch (e) {}
+
+    } catch (err) {
+        console.error('(Sticker) -> Error:', err);
+        try { await message.react('❌'); } catch (e) {}
+        message.reply('❌ Error al crear sticker. Intenta con una imagen, GIF o video más corto.');
     }
 }
 
@@ -225,7 +175,10 @@ async function handleSound(client, message, command) {
 
     const audioPath = path.join(__dirname, '..', '..', 'mp3', soundInfo.file);
 
-    if (fs.existsSync(audioPath)) {
+    try {
+        // Verificar existencia de forma asíncrona (no bloqueante)
+        await fs.promises.access(audioPath);
+
         // Intentar reaccionar, pero ignorar si falla
         try {
             await new Promise(resolve => setTimeout(resolve, 500)); // Pausa de 0.5s
@@ -234,10 +187,14 @@ async function handleSound(client, message, command) {
             // Ignoramos el error cosmético
         }
         const media = MessageMedia.fromFilePath(audioPath);
-        message.reply(media, undefined, { sendAudioAsVoice: false }); // Cambiado a false para máxima compatibilidad
-    } else {
-        message.reply(`No se encontró el archivo de audio para "!${command}".`);
-        console.error(`Archivo no encontrado: ${audioPath}`);
+        await message.reply(media, undefined, { sendAudioAsVoice: false });
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            message.reply(`No se encontró el archivo de audio para "!${command}".`);
+            console.error(`Archivo no encontrado: ${audioPath}`);
+        } else {
+            console.error(`Error en handleSound:`, error);
+        }
     }
 }
 
@@ -247,16 +204,24 @@ function getSoundCommands() {
 
 async function handleJoke(client, message) {
     const folderPath = path.join(__dirname, '..', '..', 'chistes');
-    if (!fs.existsSync(folderPath)) return message.reply("La carpeta de chistes no está configurada.");
-
-    const files = fs.readdirSync(folderPath);
-    if (files.length === 0) return message.reply("No hay chistes para contar.");
     
-    const randomIndex = Math.floor(Math.random() * files.length);
-    const audioPath = path.join(folderPath, files[randomIndex]);
-    
-    const media = MessageMedia.fromFilePath(audioPath);
-    message.reply(media, undefined, { sendAudioAsVoice: false }); // Cambiado a false para máxima compatibilidad
+    try {
+        // Leer directorio de forma asíncrona
+        const files = await fs.promises.readdir(folderPath);
+        
+        if (files.length === 0) return message.reply("No hay chistes para contar.");
+        
+        const randomIndex = Math.floor(Math.random() * files.length);
+        const audioPath = path.join(folderPath, files[randomIndex]);
+        
+        const media = MessageMedia.fromFilePath(audioPath);
+        await message.reply(media, undefined, { sendAudioAsVoice: false });
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            return message.reply("La carpeta de chistes no está configurada.");
+        }
+        console.error("Error en handleJoke:", error);
+    }
 }
 
 function getCountdownMessage(targetDate, eventName, emoji) {
@@ -286,87 +251,84 @@ function handleCountdown(command) {
     }
 }
 
-const frases = {
-    0: 'Dejame piola',
-    1: '¿Qué weá querí?',
-    2: 'Callao',
-    3: '¿Que onda compadre? ¿como estai? ¿te vine a molestar yo a ti? dejame piola, tranquilo ¿Que wea queri?',
-    4: 'Jajaja, ya te cache, puro picarte a choro no más, anda a webiar al paloma pulgón qliao.',
-    5: 'Lo siento, pero mis circuitos de humor están sobrecargados en este momento. ¡Beep boop! 😄',
-    6: 'Te diré lo que el profesor Rossa dijo una vez: "¿Por qué no te vay a webiar a otro lado?"',
-    7: '¡Error 404: Sentido del humor no encontrado! 😅',
-    8: 'No soy un bot, soy una IA con estilo. 😎',
-    9: '¡Atención, soy un bot de respuesta automática! Pero no puedo hacer café... aún. ☕',
-    10: 'Eso es lo que un bot diría. 🤖',
-    11: '¡Oh no, me has descubierto! Soy un bot maestro del disfraz. 😁',
-    12: 'Parece que llegó el comediante del grupo. 🤣',
-    13: 'El humor está de moda, y tú eres el líder. 😄👑',
-    14: 'Con ese humor, podrías competir en el festival de Viña del Mar. 🎤😄',
-    15: 'Voy a sacar mi caja de risa. Dame un momento... cric cric cric ♫ja ja ja ja jaaaa♫',
-    16: 'Meruane estaría orgulloso de ti. ¡Sigues haciendo reír! 😄',
-    17: 'Jajajaja, ya llegó el payaso al grupo, avisa para la otra. 😄',
-    18: '♫♫♫♫ Yo tomo licor, yo tomo cerveza 🍻 Y me gustan las chicas y la cumbia me divierte y me excita.. ♫♫♫♫♫',
-    19: 'A cantar: ♫♫♫ Yoooo tomo vino y cerveza 🍺 (Pisco y ron) para olvidarme de ella (Maraca culia), Tomo y me pongo loco (hasta los cocos), Loco de la cabeza (Esta cabeza) ♫♫♫',
-    20: '♫♫♫ Me fui pal baile y me emborraché,miré una chica y me enamoré,era tan bella, era tan bella,la quería comer ♫♫♫',
-    21: 'Compa, ¿qué le parece esa morra?, La que anda bailando sola, me gusta pa mí, Bella, ella sabe que está buena , Que todos andan mirándola cómo baila ♫♫♫♫♫♫',
-    22: 'jajajaja, ya empezaste con tus amariconadas 🏳️‍🌈',
-    23: '♫♫♫ Tú sabes como soy Me gusta ser así, Me gusta la mujer y le cervecita 🍻 No te sientas mal, no te vas a enojar Amigo nada más de la cervecita ♫♫♫♫♫',
-    24: '♫♫♫ Y dice.... No me quiero ir a dormir, quiero seguir bailando, quiero seguir tomando, 🍷 vino hasta morir, No me quiero ir a dormir, quiero seguir tomando 🍷 , Quiero seguir bailando, cumbia hasta morir♫♫♫',
-    25: '¿Bot? Te inyecto malware en tiempo real, wn.',
-    26: 'Llámame bot otra vez y te hago un rootkit en el alma, qliao.',
-    27: '¿Bot? Te hago un SQL injection que ni te das cuenta, wn.',
-    28: 'Sigue llamándome bot y te lanzo un ataque de fuerza bruta hasta en tus sueños, qliao.',
-    29: '¿Bot? Te corrompo todos tus datos y te dejo llorando, wn.',
-    30: 'Bot tu madre. Te hago un exploit que te deja offline, qliao.',
-    31: '¿Bot? Te instalo un ransomware y te dejo en bancarrota, wn.',
-    32: 'Vuelve a llamarme bot y te hago un man-in-the-middle en tu vida, qliao.',
-    33: 'Llamarme bot es lo único que puedes hacer, con tus hacks de pacotilla, wn.',
-    34: 'Una vez más me llamas bot y te meto en un loop de autenticación infinita, qliao.',
-    35: '¿Bot? Ctm, te hago un rm -rf / en los recuerdos y te reinicio de fábrica, gil.',
-    36: 'Sigue weando y el próximo pantallazo azul va a tener mi firma, perkin.',
-    37: 'Mi antivirus te tiene en la lista negra por ser terrible fome.',
-    38: 'Te compilo la vida, pero con puros errores y warnings, pa que te cueste.',
-    39: 'Me deci bot y te meto un DDoS al refri pa que se te eche a perder el pollo, wn.',
-    40: '¿Bot? Ojalá tu internet ande más lento que VTR en día de lluvia.',
-    41: 'Ando con menos paciencia que el Chino Ríos en una conferencia.',
-    42: '¿Y vo creí que soy la Teletón? ¿Que te ayudo 24/7? No po, wn.',
-    43: 'Estoy procesando... lo poco y na\' que me importa. Lol.',
-    44: 'Wena, te ganaste el Copihue de Oro al comentario más inútil. ¡Un aplauso! 👏',
-    45: 'Le poní más color que la Doctora Polo, wn.',
-    46: 'Jajaja, qué chistoso. Me río en binario: 01101000 01100001 01101000 01100001.'
-};
+const frases = [
+    'Dejame piola',
+    '¿Qué weá querí?',
+    'Callao',
+    '¿Que onda compadre? ¿como estai? ¿te vine a molestar yo a ti? dejame piola, tranquilo ¿Que wea queri?',
+    'Jajaja, ya te cache, puro picarte a choro no más, anda a webiar al paloma pulgón qliao.',
+    'Lo siento, pero mis circuitos de humor están sobrecargados en este momento. ¡Beep boop! 😄',
+    'Te diré lo que el profesor Rossa dijo una vez: "¿Por qué no te vay a webiar a otro lado?"',
+    '¡Error 404: Sentido del humor no encontrado! 😅',
+    'No soy un bot, soy una IA con estilo. 😎',
+    '¡Atención, soy un bot de respuesta automática! Pero no puedo hacer café... aún. ☕',
+    'Eso es lo que un bot diría. 🤖',
+    '¡Oh no, me has descubierto! Soy un bot maestro del disfraz. 😁',
+    'Parece que llegó el comediante del grupo. 🤣',
+    'El humor está de moda, y tú eres el líder. 😄👑',
+    'Con ese humor, podrías competir en el festival de Viña del Mar. 🎤😄',
+    'Voy a sacar mi caja de risa. Dame un momento... cric cric cric ♫ja ja ja ja jaaaa♫',
+    'Meruane estaría orgulloso de ti. ¡Sigues haciendo reír! 😄',
+    'Jajajaja, ya llegó el payaso al grupo, avisa para la otra. 😄',
+    '♫♫♫♫ Yo tomo licor, yo tomo cerveza 🍻 Y me gustan las chicas y la cumbia me divierte y me excita.. ♫♫♫♫♫',
+    'A cantar: ♫♫♫ Yoooo tomo vino y cerveza 🍺 (Pisco y ron) para olvidarme de ella (Maraca culia), Tomo y me pongo loco (hasta los cocos), Loco de la cabeza (Esta cabeza) ♫♫♫',
+    '♫♫♫ Me fui pal baile y me emborraché,miré una chica y me enamoré,era tan bella, era tan bella,la quería comer ♫♫♫',
+    'Compa, ¿qué le parece esa morra?, La que anda bailando sola, me gusta pa mí, Bella, ella sabe que está buena , Que todos andan mirándola cómo baila ♫♫♫♫♫♫',
+    'jajajaja, ya empezaste con tus amariconadas 🏳️‍🌈',
+    '♫♫♫ Tú sabes como soy Me gusta ser así, Me gusta la mujer y le cervecita 🍻 No te sientas mal, no te vas a enojar Amigo nada más de la cervecita ♫♫♫♫♫',
+    '♫♫♫ Y dice.... No me quiero ir a dormir, quiero seguir bailando, quiero seguir tomando, 🍷 vino hasta morir, No me quiero ir a dormir, quiero seguir tomando 🍷 , Quiero seguir bailando, cumbia hasta morir♫♫♫',
+    '¿Bot? Te inyecto malware en tiempo real, wn.',
+    'Llámame bot otra vez y te hago un rootkit en el alma, qliao.',
+    '¿Bot? Te hago un SQL injection que ni te das cuenta, wn.',
+    'Sigue llamándome bot y te lanzo un ataque de fuerza bruta hasta en tus sueños, qliao.',
+    '¿Bot? Te corrompo todos tus datos y te dejo llorando, wn.',
+    'Bot tu madre. Te hago un exploit que te deja offline, qliao.',
+    '¿Bot? Te instalo un ransomware y te dejo en bancarrota, wn.',
+    'Vuelve a llamarme bot y te hago un man-in-the-middle en tu vida, qliao.',
+    'Llamarme bot es lo único que puedes hacer, con tus hacks de pacotilla, wn.',
+    'Una vez más me llamas bot y te meto en un loop de autenticación infinita, qliao.',
+    '¿Bot? Ctm, te hago un rm -rf / en los recuerdos y te reinicio de fábrica, gil.',
+    'Sigue weando y el próximo pantallazo azul va a tener mi firma, perkin.',
+    'Mi antivirus te tiene en la lista negra por ser terrible fome.',
+    'Te compilo la vida, pero con puros errores y warnings, pa que te cueste.',
+    'Me deci bot y te meto un DDoS al refri pa que se te eche a perder el pollo, wn.',
+    '¿Bot? Ojalá tu internet ande más lento que VTR en día de lluvia.',
+    'Ando con menos paciencia que el Chino Ríos en una conferencia.',
+    '¿Y vo creí que soy la Teletón? ¿Que te ayudo 24/7? No po, wn.',
+    'Estoy procesando... lo poco y na\' que me importa. Lol.',
+    'Wena, te ganaste el Copihue de Oro al comentario más inútil. ¡Un aplauso! 👏',
+    'Le poní más color que la Doctora Polo, wn.',
+    'Jajaja, qué chistoso. Me río en binario: 01101000 01100001 01101000 01100001.'
+];
 let usedPhrases = [];
 
 function obtenerFraseAleatoria() {
-    const fraseKeys = Object.keys(frases);
-    let randomIndex = Math.floor(Math.random() * fraseKeys.length);
+    let randomIndex = Math.floor(Math.random() * frases.length);
     
-    while (usedPhrases.includes(randomIndex) && usedPhrases.length < fraseKeys.length) {
-        randomIndex = Math.floor(Math.random() * fraseKeys.length);
+    while (usedPhrases.includes(randomIndex) && usedPhrases.length < frases.length) {
+        randomIndex = Math.floor(Math.random() * frases.length);
     }
     usedPhrases.push(randomIndex);
     if (usedPhrases.length >= 5) {
         usedPhrases.shift();
     }
-    return frases[fraseKeys[randomIndex]];
+    return frases[randomIndex];
 }
 
-async function handleBotMention(client, message) {
+async function reactAndReplyWithMention(message, text, reaction, separator = ', ') {
     try {
-        const texto = obtenerFraseAleatoria();
-        
         // Obtener el ID del usuario de manera más directa
         const userId = message.author || message.from;
         
         if (!userId) {
             console.error("No se pudo obtener el ID del usuario");
-            return message.reply(texto);
+            return message.reply(text);
         }
         
         // Intentar reaccionar, pero ignorar si falla
         try {
             await new Promise(resolve => setTimeout(resolve, 500));
-            await message.react('🤡');
+            await message.react(reaction);
         } catch (reactionError) {
             // Ignoramos el error cosmético
         }
@@ -374,54 +336,27 @@ async function handleBotMention(client, message) {
         // Extraer solo el número de usuario (antes del @)
         const userNumber = userId.split('@')[0];
         
-        await message.reply(`${texto}, @${userNumber}`, undefined, {
+        await message.reply(`${text}${separator}@${userNumber}`, undefined, {
             mentions: [userId]
         });
     } catch (e) {
-        console.error("Error en handleBotMention:", e);
+        console.error("Error en reactAndReplyWithMention:", e);
         // Fallback: responder sin mención si falla todo
         try {
-            const texto = obtenerFraseAleatoria();
-            await message.reply(texto);
+            await message.reply(text);
         } catch (fallbackError) {
-            console.error("Error en fallback de handleBotMention:", fallbackError);
+            console.error("Error en fallback:", fallbackError);
         }
     }
 }
 
+async function handleBotMention(client, message) {
+    const texto = obtenerFraseAleatoria();
+    await reactAndReplyWithMention(message, texto, '🤡', ', ');
+}
+
 async function handleOnce(client, message) {
-    try {
-        // Obtener el ID del usuario de manera más directa
-        const userId = message.author || message.from;
-        
-        if (!userId) {
-            console.error("No se pudo obtener el ID del usuario");
-            return message.reply('Chupalo entonces');
-        }
-        
-        // Intentar reaccionar, pero ignorar si falla
-        try {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            await message.react('😂');
-        } catch (reactionError) {
-            // Ignoramos el error cosmético
-        }
-        
-        // Extraer solo el número de usuario (antes del @)
-        const userNumber = userId.split('@')[0];
-        
-        await message.reply('Chupalo entonces @' + userNumber, undefined, { 
-            mentions: [userId] 
-        });
-    } catch (e) {
-        console.error("Error en handleOnce:", e);
-        // Fallback: responder sin mención si falla todo
-        try {
-            await message.reply('Chupalo entonces');
-        } catch (fallbackError) {
-            console.error("Error en fallback de handleOnce:", fallbackError);
-        }
-    }
+    await reactAndReplyWithMention(message, 'Chupalo entonces', '😂', ' ');
 }
 
 

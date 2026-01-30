@@ -1,4 +1,12 @@
 {
+    "files.exclude": {
+        "**/.wwebjs_cache": false,
+        "**/temp": true
+    },
+    "search.exclude": {
+        "**/.wwebjs_cache": false,
+        "**/temp": true
+    },
     "python-envs.defaultEnvManager": "ms-python.python:system",
     "python-envs.pythonProjects": []
 }

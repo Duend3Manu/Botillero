@@ -3,6 +3,13 @@
 # Ruta al archivo que almacena el contador de actualizaciones
 $counterFile = Join-Path -Path $PSScriptRoot -ChildPath ".push_counter"
 
+# 1. MEJORA: Verificar si hay cambios reales antes de intentar actualizar
+$gitStatus = git status --porcelain
+if (-not $gitStatus) {
+    Write-Warning "⚠️ No hay cambios pendientes para subir. Todo está actualizado."
+    exit
+}
+
 # Leer el contador actual o iniciar en 0 si no existe
 if (Test-Path $counterFile) {
     $counter = [int](Get-Content $counterFile)
@@ -40,4 +47,4 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-Write-Host "Actualización completada exitosamente."
+Write-Host "✅ Actualización #$counter completada exitosamente."

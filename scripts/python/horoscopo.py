@@ -5,7 +5,6 @@ import sys
 from unidecode import unidecode
 import io
 import os
-from pathlib import Path
 
 # Forzar la salida a UTF-8 para evitar UnicodeEncodeError en Windows
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -21,6 +20,10 @@ emojis_signos = {
     "capricornio": "♑️", "acuario": "♒️", "piscis": "♓️"
 }
 
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+}
+
 def obtener_ruta_imagen(signo):
     """
     Obtiene la ruta de la imagen del signo desde la carpeta local.
@@ -34,7 +37,7 @@ def obtener_ruta_imagen(signo):
 def obtener_horoscopo(signo_buscar):
     url = "https://www.pudahuel.cl/horoscopo/"
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, headers=HEADERS, timeout=10)
         response.raise_for_status()
     except requests.RequestException as e:
         return f"Error al conectar con la página de horóscopo: {e}"
@@ -140,6 +143,5 @@ if __name__ == "__main__":
             print(f"📖 *Palabra Clave:* {horoscopo['palabra']}")
             print(f"🔢 *Número de Suerte:* {horoscopo['numero']}")
             print(f"🎨 *Color:* {horoscopo['color']}")
-            print(f"🖼️ {horoscopo['imagen']}") # Añadimos la URL de la imagen al final
         else:
             print(horoscopo)

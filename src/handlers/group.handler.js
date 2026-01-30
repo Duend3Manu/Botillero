@@ -15,18 +15,36 @@ async function handleTagAll(client, message) {
             return message.reply("Este comando solo se puede usar en grupos.");
         }
 
-        // 2. Obtener todos los participantes del grupo
-        const participants = chat.participants;
+        // --- MEJORA 1: Seguridad (Solo Admins) ---
+        const authorId = message.author || message.from;
+        const participant = chat.participants.find(p => p.id._serialized === authorId);
         
-        let text = "";
+        if (!participant || !participant.isAdmin) {
+            return message.reply("👮‍♂️ Alto ahí. Solo los administradores pueden invocar a todos.");
+        }
+
+        // --- MEJORA 2: Mensaje Personalizado ---
+        // Limpiamos el comando del inicio para obtener solo el texto del mensaje
+        const customText = message.body.replace(/^([!/])\w+\s*/i, '').trim();
+        let text = customText ? `📢 *${customText}*\n\n` : "📢 *Atención grupo:*\n\n";
+        
         let mentions = [];
 
-        // 3. Construir el texto y la lista de menciones
-        for (let participant of participants) {
-            // El ID del contacto se usa para la mención
-            const contact = await client.getContactById(participant.id._serialized);
+        // --- MEJORA 3: Optimización (Carga Paralela) ---
+        // 1. Filtramos al propio bot para que no se auto-etiquete (es redundante)
+        const botId = client.info.wid._serialized;
+        const participantsToTag = chat.participants.filter(p => p.id._serialized !== botId);
+
+        // 2. Carga robusta: Si falla un contacto, no rompemos todo el comando
+        const contactPromises = participantsToTag.map(p => 
+            client.getContactById(p.id._serialized).catch(() => null)
+        );
+        const results = await Promise.all(contactPromises);
+        const contacts = results.filter(c => c !== null); // Filtramos los que fallaron
+
+        for (const contact of contacts) {
             mentions.push(contact);
-            text += `@${participant.id.user} `;
+            text += `@${contact.id.user} `;
         }
 
         // 4. Enviar el mensaje con el texto y las menciones

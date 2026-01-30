@@ -59,6 +59,30 @@ async function getHoroscope(signo) {
     }
 }
 
+async function getChineseHoroscope(signo) {
+    const signoLimpio = limpiarSigno(signo);
+
+    if (!signosChinos.includes(signoLimpio)) {
+        return { text: 'Por favor, proporciona un signo chino válido (rata, buey, tigre, conejo, dragón, serpiente, caballo, cabra, mono, gallo, perro, cerdo).', imagePath: null };
+    }
+
+    try {
+        console.log(`(Servicio Horóscopo Chino) -> Ejecutando horoscopoc.py para el signo ${signoLimpio}...`);
+        const result = await pythonService.executeScript('horoscopoc.py', [signoLimpio]);
+        if (result.code !== 0) {
+            throw new Error(result.stderr || 'Error al ejecutar script de horóscopo chino');
+        }
+        const imagePath = findImagePath(signoLimpio);
+        
+        return { text: result.stdout, imagePath: imagePath };
+
+    } catch (error) {
+        console.error(`Error en getChineseHoroscope para ${signo}:`, error.message);
+        return { text: 'No pude obtener el horóscopo chino en este momento.', imagePath: null };
+    }
+}
+
 module.exports = {
-    getHoroscope
+    getHoroscope,
+    getChineseHoroscope
 };

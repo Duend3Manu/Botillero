@@ -27,7 +27,6 @@ GEEK_TERMS_PATH = SCRIPT_DIR / 'src' / 'data' / 'terminos_geek.json'
 
 # Cache y reintentos
 import time
-import hashlib
 
 CARTELERA_CACHE_PATH = SCRIPT_DIR / 'temp' / 'cartelera_cache.json'
 CARTELERA_TTL = 6 * 60 * 60  # 6 horas
@@ -171,11 +170,16 @@ def get_cartelera_cine():
         for attempt in range(1, RETRIES + 1):
             try:
                 with sync_playwright() as p:
-                    browser = p.chromium.launch(headless=True)
-                    page = browser.new_page()
+                    # MEJORA: Argumentos para estabilidad en servidor (VPS/Linux)
+                    browser = p.chromium.launch(
+                        headless=True, 
+                        args=['--no-sandbox', '--disable-dev-shm-usage']
+                    )
+                    context = browser.new_context(user_agent=DEFAULT_HEADERS['User-Agent'])
+                    page = context.new_page()
                     try:
-                        page.goto("https://cinepolischile.cl/", wait_until='domcontentloaded', timeout=15000)
-                        page.wait_for_selector('div.titulo-pelicula', timeout=10000)
+                        page.goto("https://cinepolischile.cl/", wait_until='domcontentloaded', timeout=20000)
+                        page.wait_for_selector('div.titulo-pelicula', timeout=15000)
                         content = page.content()
                     finally:
                         browser.close()

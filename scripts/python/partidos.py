@@ -3,18 +3,7 @@ import requests
 from datetime import datetime, timedelta
 import sys
 import io
-from dateutil.parser import isoparse
 from zoneinfo import ZoneInfo
-import locale
-
-# --- CONFIGURACIÓN DE FECHA EN ESPAÑOL ---
-try:
-    locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
-except locale.Error:
-    try:
-        locale.setlocale(locale.LC_TIME, 'es_CL.UTF-8')
-    except locale.Error:
-        print("Advertencia: No se pudo configurar el locale a español para las fechas.")
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
@@ -25,6 +14,16 @@ LIGAS = {
 }
 
 ZONA_HORARIA_CHILE = ZoneInfo('America/Santiago')
+
+# Traducción manual para no depender del sistema operativo (locale)
+DIAS_SEMANA = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
+MESES = {1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"}
+
+def formatear_fecha(dt):
+    """Formatea fecha en español sin depender de locale."""
+    dia = DIAS_SEMANA[dt.weekday()]
+    mes = MESES[dt.month]
+    return f"{dia}, {dt.day} de {mes}"
 
 def obtener_y_formatear_partidos(codigo_liga, fecha):
     """
@@ -49,7 +48,8 @@ def obtener_y_formatear_partidos(codigo_liga, fecha):
             estado_tipo = evento["status"]["type"]["state"]
 
             if estado_tipo == "pre":
-                hora_utc = isoparse(evento["date"])
+                # Parseo manual ISO8601 para evitar dependencia de dateutil
+                hora_utc = datetime.fromisoformat(evento["date"].replace('Z', '+00:00'))
                 hora_chile = hora_utc.astimezone(ZONA_HORARIA_CHILE).strftime("%H:%M")
                 partidos_formateados.append(f"🏟️ *{equipo_local}* vs *{equipo_visitante}* _({hora_chile})_")
             else:
@@ -81,7 +81,7 @@ def main():
                 partidos_futuros = obtener_y_formatear_partidos(codigo, fecha_futura)
 
                 if partidos_futuros:
-                    print(f"📅 Próxima fecha: {fecha_futura.strftime('%A, %d de %B').capitalize()}")
+                    print(f"📅 Próxima fecha: {formatear_fecha(fecha_futura)}")
                     for partido in partidos_futuros:
                         print(partido)
                     encontrado_futuro = True

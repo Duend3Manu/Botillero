@@ -4,6 +4,19 @@ node_modules/
 .wwebjs_auth/session
 .wwebjs_cache/
 messages.db
+temp/
+
+# SQLite temporary files
+*.db-shm
+*.db-wal
+
+# Service cache files
+casos.json
+ticket.json
+
+# Debug/test files
+debug_output.txt
+test_output.txt
 
 # Python
 .venv/

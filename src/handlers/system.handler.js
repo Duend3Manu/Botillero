@@ -4,8 +4,70 @@
 const os = require('os');
 const si = require('systeminformation');
 const axios = require('axios');
+const packageInfo = require('../../package.json');
+
+// --- Contadores globales de estadísticas del bot ---
+const BOT_STATS = {
+    messagesProcessed: 0,
+    commandsExecuted: 0,
+    uniqueUsers: new Set(),
+    startTime: Date.now()
+};
+
+// Función para incrementar contadores (exportada para uso en otros módulos)
+function incrementStats(type, userId = null) {
+    if (type === 'message') BOT_STATS.messagesProcessed++;
+    if (type === 'command') BOT_STATS.commandsExecuted++;
+    if (userId) BOT_STATS.uniqueUsers.add(userId);
+}
 
 // --- Funciones auxiliares para obtener métricas del sistema ---
+
+// Obtiene información de red (IP local inmediata, IP pública después)
+async function getNetworkInfo() {
+    try {
+        const networkInterfaces = os.networkInterfaces();
+        let localIP = 'No disponible';
+        
+        // Buscar la IP local (primera interfaz activa que no sea loopback)
+        for (const [name, interfaces] of Object.entries(networkInterfaces)) {
+            for (const iface of interfaces) {
+                if (iface.family === 'IPv4' && !iface.internal) {
+                    localIP = iface.address;
+                    break;
+                }
+            }
+            if (localIP !== 'No disponible') break;
+        }
+        
+        // Obtener IP pública (solo si no está bloqueando)
+        let publicIP = 'Obteniendo...';
+        try {
+            const response = await axios.get('https://api.ipify.org?format=json', { timeout: 2000 });
+            publicIP = response.data.ip;
+        } catch {
+            publicIP = 'No disponible';
+        }
+        
+        return { localIP, publicIP };
+    } catch (error) {
+        return { localIP: 'Error', publicIP: 'Error' };
+    }
+}
+
+// Crea una barra de progreso visual
+function createProgressBar(percentage, length = 10) {
+    const filled = Math.round((percentage / 100) * length);
+    const empty = length - filled;
+    const bar = '█'.repeat(filled) + '░'.repeat(empty);
+    
+    // Emojis dinámicos según el porcentaje
+    let emoji = '🟢';
+    if (percentage >= 90) emoji = '🔴';
+    else if (percentage >= 75) emoji = '🟡';
+    
+    return `${emoji} ${bar} ${percentage}%`;
+}
 
 // Mide el tiempo de respuesta a Internet (ping) usando un endpoint ligero y timeout
 async function checkPing(timeoutMs = 3000) {
@@ -15,9 +77,45 @@ async function checkPing(timeoutMs = 3000) {
         const end = Date.now();
         return end - start;
     } catch (error) {
-        // No enchufamos demasiado log para no ensuciar la salida del bot
         return null;
     }
+}
+
+// Verifica servicios críticos (versión rápida, sin bloquear)
+async function checkCriticalServices() {
+    const services = {
+        internet: false,
+        python: false
+    };
+    
+    try {
+        // Ejecutar verificaciones en paralelo con timeout global
+        await Promise.race([
+            (async () => {
+                // Check Internet
+                try {
+                    await axios.get('https://www.google.com/generate_204', { timeout: 800 });
+                    services.internet = true;
+                } catch {
+                    services.internet = false;
+                }
+                
+                // Check Python (solo un intento rápido)
+                try {
+                    const { execSync } = require('child_process');
+                    execSync('python --version', { timeout: 500, stdio: 'pipe' });
+                    services.python = true;
+                } catch {
+                    services.python = false;
+                }
+            })(),
+            new Promise(resolve => setTimeout(resolve, 1500)) // Timeout global de 1.5s
+        ]);
+    } catch {
+        // Si algo falla, devolver valores por defecto
+    }
+    
+    return services;
 }
 
 // ----------------------
@@ -29,44 +127,52 @@ const METRICS_CACHE = {
     ram: getRAMUsage(),
     cpu: { usage: null, model: os.cpus()[0] ? os.cpus()[0].model : 'unknown' },
     disk: null,
+    osInfo: 'Desconocido',
+    temperature: null
 };
 
-let metricsUpdaterInterval = null;
+// REMOVIDO: metricsUpdaterInterval ya no se necesita
 
 async function refreshMetrics() {
     try {
-        // Actualizamos en paralelo, pero no esperamos en handlePing
-        const [pingRes, cpuRes, diskRes] = await Promise.allSettled([
-            checkPing(2000),
+        // Actualizamos en paralelo
+        const [pingRes, cpuRes, diskRes, memRes, osRes, tempRes] = await Promise.allSettled([
+            checkPing(1000),  // Reducido de 2000 a 1000
             getCPUUsage(),
             getDiskUsage(),
+            si.mem(),
+            si.osInfo(),
+            getTemperature()
         ]);
 
         if (pingRes.status === 'fulfilled') METRICS_CACHE.ping = pingRes.value;
         if (cpuRes.status === 'fulfilled') METRICS_CACHE.cpu = cpuRes.value;
         if (diskRes.status === 'fulfilled') METRICS_CACHE.disk = diskRes.value;
+        if (osRes.status === 'fulfilled') METRICS_CACHE.osInfo = `${osRes.value.distro} ${osRes.value.release}`;
+        if (tempRes.status === 'fulfilled') METRICS_CACHE.temperature = tempRes.value;
 
-        // RAM la obtenemos con la función ligera directamente
-        METRICS_CACHE.ram = getRAMUsage();
+        // RAM usando systeminformation (más preciso)
+        if (memRes.status === 'fulfilled') {
+            const m = memRes.value;
+            METRICS_CACHE.ram = {
+                used: (m.active / 1024 / 1024).toFixed(2),
+                total: (m.total / 1024 / 1024).toFixed(2),
+                percentage: ((m.active / m.total) * 100).toFixed(2)
+            };
+        } else {
+            METRICS_CACHE.ram = getRAMUsage();
+        }
+        
         METRICS_CACHE.lastUpdated = Date.now();
     } catch (e) {
-        // no fallamos si algo va mal; el cache mantiene valores previos
+        // no fallamos si algo va mal
     }
 }
 
-function startMetricsUpdater(intervalMs = 2000) {
-    if (metricsUpdaterInterval) return;
-    // refrescar inmediatamente y luego en interval
-    refreshMetrics();
-    metricsUpdaterInterval = setInterval(refreshMetrics, intervalMs);
-    // no bloquear el proceso al cerrar
-    if (metricsUpdaterInterval.unref) metricsUpdaterInterval.unref();
-}
+// REMOVIDO: Auto-updater causaba congelamiento del bot
+// Las métricas ahora SOLO se refrescan cuando se ejecuta !ping
 
-// iniciar updater al cargar el módulo
-startMetricsUpdater(2000);
-
-// Helper: espera un refresh corto para cold-start (no bloquear demasiado)
+// Helper: espera un refresh corto para cold-start
 function timeoutPromise(ms) {
     return new Promise((res) => setTimeout(res, ms));
 }
@@ -84,7 +190,6 @@ function getRAMUsage() {
 }
 
 // Obtiene el uso de CPU
-// Usar systeminformation para obtener carga de CPU (más fiable)
 async function getCPUUsage() {
     try {
         const load = await si.currentLoad();
@@ -104,7 +209,9 @@ async function getDiskUsage() {
     try {
         const disks = await si.fsSize();
         if (!Array.isArray(disks) || disks.length === 0) return null;
-        const disk = disks[0]; // Tomar la primera partición
+        
+        const disk = disks.find(d => d.mount === '/' || d.mount === 'C:') || disks[0];
+        
         return {
             used: Number(disk.used / 1024 / 1024 / 1024).toFixed(2),
             total: Number(disk.size / 1024 / 1024 / 1024).toFixed(2),
@@ -115,7 +222,20 @@ async function getDiskUsage() {
     }
 }
 
-// Formatea el tiempo de actividad del sistema
+// Obtiene la temperatura del CPU (si está disponible)
+async function getTemperature() {
+    try {
+        const temp = await si.cpuTemperature();
+        if (temp && temp.main && temp.main > 0) {
+            return temp.main;
+        }
+        return null;
+    } catch (error) {
+        return null;
+    }
+}
+
+// Formatea el tiempo de actividad
 function formatUptime(seconds) {
     const days = Math.floor(seconds / (3600 * 24));
     const hours = Math.floor((seconds % (3600 * 24)) / 3600);
@@ -128,24 +248,31 @@ function formatUptime(seconds) {
 async function handlePing(message) {
     const startCommandTime = Date.now();
     
-    // Si el cache está vacío (cold-start), intentamos un refresh corto
-    if (!METRICS_CACHE.lastUpdated) {
-        // esperar hasta 500ms por un refresh para no bloquear demasiado
-        await Promise.race([refreshMetrics(), timeoutPromise(500)]);
+    // Refrescar métricas solo cuando se ejecuta el comando (sin background jobs)
+    // Si el cache es muy viejo (>10s) o no existe, refrescar
+    if (!METRICS_CACHE.lastUpdated || (Date.now() - METRICS_CACHE.lastUpdated) > 10000) {
+        await refreshMetrics();
     }
 
-    // Obtenemos todas las métricas en paralelo para mayor eficiencia
-    // Usar valores en caché (actualizados en background) para respuesta rápida
+    // Verificar servicios críticos
+    const services = await checkCriticalServices();
+
+    // Obtener métricas del caché
     const cache = METRICS_CACHE;
     const pingTime = cache.ping;
     const ramUsage = cache.ram || getRAMUsage();
     const cpuUsage = cache.cpu || { usage: null, model: os.cpus()[0] ? os.cpus()[0].model : 'unknown' };
     const diskUsage = cache.disk || null;
+    const osInfo = cache.osInfo || 'Desconocido';
+    const temperature = cache.temperature;
 
     const lag = Date.now() - startCommandTime;
-    const uptime = formatUptime(os.uptime());
+    const systemUptime = formatUptime(os.uptime());
+    const botUptime = formatUptime((Date.now() - BOT_STATS.startTime) / 1000);
+    const nodeVersion = process.version;
+    const botVersion = packageInfo.version;
 
-    // Construimos el mensaje de respuesta
+    // Helpers
     const safe = (v, fallback = 'N/A') => (v === null || v === undefined ? fallback : v);
     const safeNumber = (n, decimals = 2, fallback = 'N/A') => {
         if (n === null || n === undefined) return fallback;
@@ -154,21 +281,52 @@ async function handlePing(message) {
         return Number.isFinite(parsed) ? parsed.toFixed(decimals) : fallback;
     };
 
-    const ageSec = METRICS_CACHE.lastUpdated ? `${Math.floor((Date.now() - METRICS_CACHE.lastUpdated) / 1000)}s` : 'no disponible';
+    // Crear barras de progreso
+    const ramBar = ramUsage.percentage ? createProgressBar(parseFloat(ramUsage.percentage)) : 'N/A';
+    const cpuBar = cpuUsage.usage ? createProgressBar(parseFloat(cpuUsage.usage)) : 'N/A';
+    const diskBar = diskUsage?.percentage ? createProgressBar(parseFloat(diskUsage.percentage)) : 'N/A';
+
+    // Servicios check
+    const internetStatus = services.internet ? '✅ Conectado' : '❌ Sin conexión';
+    const pythonStatus = services.python ? '✅ Disponible' : '⚠️ No detectado';
+
+    // Temperatura
+    const tempInfo = temperature ? 
+        (temperature > 80 ? `🔥 ${temperature}°C (Alto)` : 
+         temperature > 60 ? `🟡 ${temperature}°C (Normal)` : 
+         `🟢 ${temperature}°C (Óptimo)`) : 
+        'N/A';
 
     const response = `
 *Estado del Sistema - Botillero* ⚙️
 
-🏓 *Ping a Google:* ${safe(pingTime, 'no disponible')} ms
-⏳ *Latencia del comando:* ${lag} ms
-💾 *RAM:* ${safe(ramUsage.used)} / ${safe(ramUsage.total)} MB (${safe(ramUsage.percentage)}%)
-⚡ *CPU:* ${safeNumber(cpuUsage.usage, 2, 'no disponible')}% (${safe(cpuUsage.model)})
-💽 *Disco:* ${diskUsage ? `${safe(diskUsage.used)} / ${safe(diskUsage.total)} GB (${safe(diskUsage.percentage)}%)` : 'no disponible'}
-⏱️ *Tiempo de actividad:* ${uptime}
-ℹ️ *Edad de datos:* ${ageSec}
+📡 *RED*
+ Internet: ${internetStatus}
+
+🖥️ *SISTEMA*
+💾 RAM: ${ramBar}
+   └ ${safe(ramUsage.used)} / ${safe(ramUsage.total)} MB
+⚡ CPU: ${cpuBar}
+   └ ${safe(cpuUsage.model)}
+💽 Disco: ${diskBar}
+   └ ${diskUsage ? `${safe(diskUsage.used)} / ${safe(diskUsage.total)} GB` : 'N/A'}
+🌡️ Temp CPU: ${tempInfo}
+⏱️ Uptime Sistema: ${systemUptime}
+🖥️ OS: ${osInfo}
+
+🤖 *BOT*
+🏓 Ping Google: ${safe(pingTime, 'N/A')} ms
+⏳ Latencia: ${lag} ms
+📊 Mensajes: ${BOT_STATS.messagesProcessed}
+⚡ Comandos: ${BOT_STATS.commandsExecuted}
+👥 Usuarios: ${BOT_STATS.uniqueUsers.size}
+🕐 Uptime Bot: ${botUptime}
+🟢 Node: ${nodeVersion}
+🔧 Versión: v${botVersion}
+🐍 Python: ${pythonStatus}
 `.trim();
 
     return response;
 }
 
-module.exports = { handlePing };
+module.exports = { handlePing, incrementStats };

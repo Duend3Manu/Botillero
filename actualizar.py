@@ -1,6 +1,7 @@
 import subprocess
 import sys
 import os
+import shutil
 
 def limpiar_bloqueo():
     """Si existe un archivo de bloqueo de git, lo elimina."""
@@ -18,14 +19,24 @@ print("⚠️ Asegúrate de que el proceso del bot (node) esté detenido antes d
 # Verificación de .gitignore para messages.db
 gitignore_path = ".gitignore"
 db_file = "messages.db"
+
+# 1. MEJORA: Backup de seguridad de la base de datos antes de cualquier operación destructiva
+if os.path.exists(db_file):
+    print(f"🛡️ Creando respaldo de seguridad: {db_file}.bak ...")
+    shutil.copy2(db_file, f"{db_file}.bak")
+
+# 2. MEJORA: Agregar automáticamente al .gitignore en lugar de solo avisar
 if os.path.exists(gitignore_path):
     with open(gitignore_path, "r") as f:
         ignored_files = f.read().splitlines()
-        if db_file not in ignored_files and f"/{db_file}" not in ignored_files:
-            print(f"🤔 El archivo '{db_file}' no está en .gitignore. Esto puede causar problemas si el bot está corriendo.")
-            print("   Considera agregarlo a .gitignore para evitar errores de bloqueo de archivos.")
+    if db_file not in ignored_files and f"/{db_file}" not in ignored_files:
+        print(f"📝 Agregando '{db_file}' a .gitignore para protección futura...")
+        with open(gitignore_path, "a") as f:
+            f.write(f"\n{db_file}")
 else:
-    print("🤷 No se encontró el archivo .gitignore. No se pudo verificar si 'messages.db' está ignorado.")
+    print("🤷 No se encontró .gitignore. Creándolo...")
+    with open(gitignore_path, "w") as f:
+        f.write(f"{db_file}\nnode_modules/\n.env\n.wwebjs_auth/\n")
 
 def ejecutar(comando, verificar=True):
     """Ejecuta un comando de forma segura y devuelve si tuvo éxito."""
@@ -36,6 +47,7 @@ def ejecutar(comando, verificar=True):
             capture_output=True,
             text=True,
             encoding='utf-8',
+            errors='replace', # Evita crashes si la consola de Windows usa caracteres raros
             check=verificar
         )
         if resultado.stdout.strip():

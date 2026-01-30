@@ -1,223 +1,265 @@
-// src/handlers/command.handler.js (VERSIÓN FINAL Y 100% LIMPIA)
+// src/handlers/command.handler.js (VERSIÓN OPTIMIZADA)
 "use strict";
 
-const { MessageMedia } = require('whatsapp-web.js');
-
-// --- Importaciones de Servicios (Python) ---
-const metroService = require('../services/metro.service');
-const nationalTeamService = require('../services/nationalTeam.service');
-const economyService = require('../services/economy.service');
-const horoscopeService = require('../services/horoscope.service');
-const externalService = require('../services/external.service');;
-
-// Forma correcta y limpia de importar las funciones que necesitamos
-const { getMatchDaySummary, getLeagueTable, getLeagueUpcomingMatches } = require('../services/league.service.js');
-const { getChampionsMatches, getChampionsStandings } = require('../services/champions.service.js');
-
-const { getTransbankStatus } = require('../services/transbank.service.js');
-// --- Importaciones de Manejadores (Handlers) ---
-const { handlePing } = require('./system.handler');
-const { handleFeriados, handleFarmacias, handleClima, handleSismos, handleBus, handleSec, handleMenu, handleRandom } = require('./utility.handler');
-const { handleSticker, handleSound, getSoundCommands, handleAudioList, handleJoke, handleCountdown, handleBotMention, handleOnce } = require('./fun.handler');
-const { handleWikiSearch, handleNews, handleGoogleSearch } = require('./search.handler'); // Corregido: handleGoogleSearch no estaba en tu lista original pero sí en el switch
-const { handleTicket, handleCaso } = require('./stateful.handler');
-const { handleAiHelp } = require('./ai.handler');
-const { handlePhoneSearch, handleTneSearch, handlePatenteSearch } = require('./personalsearch.handler');
-const { handleNetworkQuery, handleNicClSearch } = require('./network.handler');
-const { handleReaction } = require('../services/messaging.service');
-// const { summarizeUrl } = require('../services/url-summarizer.service'); // ELIMINADO
+const { MessageMedia } = require('../adapters/wwebjs-adapter');
 const rateLimiter = require('../services/rate-limiter.service');
-// --- Lógica Principal ---
-const soundCommands = getSoundCommands();
-const countdownCommands = ['18', 'navidad', 'añonuevo'];
+const { handleReaction } = require('../services/messaging.service');
+
+// --- Lazy Loading de Servicios ---
+// Los servicios solo se cargan cuando realmente se necesitan
+const services = {
+    get metro() { return require('../services/metro.service'); },
+    get nationalTeam() { return require('../services/nationalTeam.service'); },
+    get economy() { return require('../services/economy.service'); },
+    get horoscope() { return require('../services/horoscope.service'); },
+    get league() { return require('../services/league.service.js'); },
+    get transbank() { return require('../services/transbank.service.js'); },
+    get system() { return require('./system.handler'); },
+    get utility() { return require('./utility.handler'); },
+    get fun() { return require('./fun.handler'); },
+    get search() { return require('./search.handler'); },
+    get stateful() { return require('./stateful.handler'); },
+    get ai() { return require('./ai.handler'); },
+    get personalSearch() { return require('./personalsearch.handler'); },
+    get network() { return require('./network.handler'); },
+    get fap() { return require('./fap.handler'); },
+    get group() { return require('./group.handler'); }
+};
 
 // --- Cooldowns para comandos específicos ---
 let lastTransbankRequestTimestamp = 0;
-const TRANSBANK_COOLDOWN_SECONDS = 30; // 30 segundos de espera para !transbank
+const TRANSBANK_COOLDOWN_SECONDS = 30;
 
-
-// --- ¡NUEVO! Lista de todos los comandos válidos ---
-const validCommands = new Set([
-    ...soundCommands, ...countdownCommands,
-    'tabla', 'ligatabla', 'prox', 'ligapartidos', 'partidos', 'metro',
-    'tclasi', 'selecciontabla', 'clasi', 'seleccionpartidos', 'valores',
-    'horoscopo', 'trstatus', 'ping', 'feriados',
-    'far', 'clima', 'sismos', 'bus', 'sec', 'secrm', 'menu', 'comandos',
-    'wiki', 'noticias', 'g', 'pat', 'patente', 's', 'audios', 'sonidos',
-    'chiste', 'ticket', 'ticketr', 'tickete', 'caso', 'ecaso', 'icaso', 'transbank',
-    'ayuda', 'num', 'tel', 'tne', 'pase', 'whois', 'net', 'nic', 'id',
-    'random', 'dato', 'curiosidad', 'toimg', 'champion', 'tchampion'
-]); 
-
-async function commandHandler(client, message) {
-    const body = message.body.trim(); // Usamos el cuerpo original sin convertir a minúsculas todavía.
+// --- Helpers para comandos con lógica repetida ---
+async function handleHoroscopeCommand(client, message, serviceMethod) {
+    const signo = message.body.split(' ')[1];
+    if (!signo) {
+        return "Por favor, escribe un signo. Ej: `!horoscopo aries`";
+    }
     
-    // La detección de menciones puede seguir usando el texto en minúsculas.
-    const lowerBody = body.toLowerCase();
-    if (/\b(bot|boot|bott|bbot)\b/.test(lowerBody)) {
-        return handleBotMention(client, message);
+    const result = await serviceMethod(signo);
+    await message.reply(result.text);
+    
+    if (result.imagePath) {
+        const media = MessageMedia.fromFilePath(result.imagePath);
+        await client.sendMessage(message.from, media);
     }
-    if (/\b(once|onse|11)\b/.test(lowerBody)) {
-        return handleOnce(client, message);
-    }
+    return null; // Ya enviamos la respuesta
+}
 
-    // --- ¡NUEVA LÓGICA DE DETECCIÓN DE COMANDOS! ---
-    // Buscamos un comando válido en cualquier parte del mensaje.
+async function handleTransbankWithCooldown() {
+    const now = Date.now();
+    const timeSinceLastRequest = (now - lastTransbankRequestTimestamp) / 1000;
+
+    if (timeSinceLastRequest < TRANSBANK_COOLDOWN_SECONDS) {
+        const timeLeft = Math.ceil(TRANSBANK_COOLDOWN_SECONDS - timeSinceLastRequest);
+        return `⏳ El comando !transbank está en cooldown. Por favor, espera ${timeLeft} segundos.`;
+    }
+    
+    const result = await services.transbank.getTransbankStatus();
+    lastTransbankRequestTimestamp = Date.now();
+    return result;
+}
+
+async function handleRandomCommand(client, message) {
+    const randomData = await services.utility.handleRandom();
+    
+    if (randomData.type === 'image' && randomData.media_url) {
+        try {
+            const media = await MessageMedia.fromUrl(randomData.media_url);
+            await client.sendMessage(message.from, media, { caption: randomData.caption });
+        } catch (err) {
+            console.error("Error al enviar imagen random:", err);
+            await message.reply(randomData.caption + "\n\n(No pude cargar la imagen 😢)");
+        }
+        return null;
+    }
+    
+    return randomData.caption;
+}
+
+async function handleStickerToImage(client, message) {
+    if (!message.hasQuotedMsg) {
+        return 'Debes responder a un sticker para convertirlo en imagen.';
+    }
+    
+    const quotedMsg = await message.getQuotedMessage();
+    if (quotedMsg.hasMedia && quotedMsg.type === 'sticker') {
+        const stickerMedia = await quotedMsg.downloadMedia();
+        await client.sendMessage(message.from, stickerMedia, { 
+            caption: '¡Listo! Aquí tienes tu sticker como imagen. ✨' 
+        });
+        return null;
+    }
+    
+    return 'El mensaje al que respondiste no es un sticker.';
+}
+
+// --- Mapa de Alias ---
+const commandAliases = {
+    'ligatabla': 'tabla',
+    'ligapartidos': 'prox',
+    'selecciontabla': 'tclasi',
+    'seleccionpartidos': 'clasi',
+    'ticketr': 'ticket',
+    'tickete': 'ticket',
+    'ecaso': 'caso',
+    'icaso': 'caso',
+    'tel': 'num',
+    'patente': 'pat',
+    'net': 'whois',
+    'sonidos': 'audios',
+    'comandos': 'menu',
+    'secrm': 'sec',
+    'dato': 'random',
+    'curiosidad': 'random',
+    'pase': 'tne'
+};
+
+// --- Command Map (Reemplaza el switch gigante) ---
+const commandMap = {
+    // Liga/Deportes
+    'tabla': () => services.league.getLeagueTable(),
+    'prox': () => services.league.getLeagueUpcomingMatches(),
+    'partidos': () => services.league.getMatchDaySummary(),
+    'tclasi': () => services.nationalTeam.getQualifiersTable(),
+    'clasi': () => services.nationalTeam.getQualifiersMatches(),
+    
+    // Servicios públicos
+    'metro': () => services.metro.getMetroStatus(),
+    'valores': () => services.economy.getEconomicIndicators(),
+    'horoscopo': (client, msg) => handleHoroscopeCommand(client, msg, services.horoscope.getHoroscope.bind(services.horoscope)),
+    'chino': (client, msg) => handleHoroscopeCommand(client, msg, services.horoscope.getChineseHoroscope.bind(services.horoscope)),
+    'trstatus': () => services.transbank.getTransbankStatus(),
+    'transbank': () => handleTransbankWithCooldown(),
+    'bancos': (_, msg) => services.utility.handleBancos(msg),
+    
+    // Sistema y utilidades
+    'ping': (_, msg) => services.system.handlePing(msg),
+    'feriados': (_, msg) => services.utility.handleFeriados(msg),
+    'far': (_, msg) => services.utility.handleFarmacias(msg),
+    'clima': (_, msg) => services.utility.handleClima(msg),
+    'sismos': () => services.utility.handleSismos(),
+    'bus': (client, msg) => services.utility.handleBus(msg, client),
+    'sec': (_, msg) => services.utility.handleSec(msg),
+    'menu': () => services.utility.handleMenu(),
+    'recap': (_, msg) => services.utility.handleRecap(msg),
+    
+    // Búsquedas
+    'wiki': (_, msg) => services.search.handleWikiSearch(msg),
+    'noticias': (_, msg) => services.search.handleNews(msg),
+    'g': (_, msg) => services.search.handleGoogleSearch(msg),
+    'pat': (_, msg) => services.personalSearch.handlePatenteSearch(msg),
+    'audios': () => services.fun.handleAudioList(),
+    
+    // Diversión
+    'chiste': (client, msg) => services.fun.handleJoke(client, msg),
+    's': (client, msg) => services.fun.handleSticker(client, msg),
+    'random': (client, msg) => handleRandomCommand(client, msg),
+    'toimg': (client, msg) => handleStickerToImage(client, msg),
+    
+    // Tickets y casos
+    'ticket': (_, msg) => services.stateful.handleTicket(msg),
+    'caso': (_, msg) => services.stateful.handleCaso(msg),
+    
+    // IA y ayuda
+    'ayuda': (_, msg) => services.ai.handleAiHelp(msg),
+    'resumen': (_, msg) => services.ai.handleSummary(msg),
+    
+    // Búsquedas personales
+    'num': (client, msg) => services.personalSearch.handlePhoneSearch(client, msg),
+    'tne': (_, msg) => services.personalSearch.handleTneSearch(msg),
+    
+    // Red
+    'whois': (_, msg) => services.network.handleNetworkQuery(msg),
+    'nic': (_, msg) => services.network.handleNicClSearch(msg),
+    
+    // FAP y grupos
+    'fap': (client, msg) => services.fap.handleFapSearch(client, msg),
+    'todos': (client, msg) => services.group.handleTagAll(client, msg),
+    
+    // ID del chat
+    'id': (_, msg) => {
+        console.log('ID de este chat:', msg.from);
+        msg.reply(`ℹ️ El ID de este chat es:\n${msg.from}`);
+        return null;
+    }
+};
+
+// --- Lista de comandos válidos ---
+const soundCommands = services.fun.getSoundCommands();
+const countdownCommands = ['18', 'navidad', 'añonuevo'];
+
+const validCommands = new Set([
+    ...soundCommands, 
+    ...countdownCommands,
+    ...Object.keys(commandMap),
+    ...Object.keys(commandAliases)
+]);
+
+// --- Regex Pre-compilada ---
+const commandRegex = new RegExp(
+    `([!/])(${[...validCommands].sort((a, b) => b.length - a.length).join('|')})\\b`, 
+    'i'
+);
+
+// --- Handler Principal ---
+async function commandHandler(client, message) {
+    const body = message.body.trim();
+    
+    // Detectar comando usando regex optimizada
     let command = null;
-    const words = body.split(/\s+/); // Dividimos el mensaje en palabras
+    const match = body.match(commandRegex);
 
-    for (const word of words) {
-        // Limpiamos la palabra de posibles signos de puntuación al final
-        const cleanWord = word.toLowerCase().replace(/[.,!?¡¿:;]$/, '');
-        if (cleanWord.startsWith('!') || cleanWord.startsWith('/')) {
-            const potentialCommand = cleanWord.substring(1);
-            if (validCommands.has(potentialCommand)) {
-                command = potentialCommand;
-                break; // Encontramos el primer comando válido y salimos del bucle.
-            }
+    if (match) {
+        command = match[2].toLowerCase();
+        
+        // Normalizar el mensaje si el comando no está al principio
+        if (match.index > 0) {
+            message.body = message.body.substring(match.index);
         }
     }
 
-    // Si no se encontró ningún comando válido, no hacemos nada.
-    if (!command) return;
-
-    let replyMessage;
-
-    // Los comandos de sonido tienen su propia lógica de reacción, así que los manejamos primero.
-    if (soundCommands.includes(command)) {
-        console.log(`(Handler) -> Comando de sonido recibido: "${command}"`);
-        return handleSound(client, message, command);
+    // Easter eggs (menciones al bot)
+    if (!command) {
+        const lowerBody = body.toLowerCase();
+        if (/\b(bot|boot|bott|bbot)\b/.test(lowerBody)) {
+            return services.fun.handleBotMention(client, message);
+        }
+        if (/\b(once|onse|11)\b/.test(lowerBody)) {
+            return services.fun.handleOnce(client, message);
+        }
+        return;
     }
 
+    // Comandos de sonido (tienen su propia lógica de reacción)
+    if (soundCommands.includes(command)) {
+        console.log(`(Handler) -> Comando de sonido recibido: "${command}"`);
+        return services.fun.handleSound(client, message, command);
+    }
+
+    // Comandos de countdown
+    if (countdownCommands.includes(command)) {
+        const replyMessage = services.fun.handleCountdown(command);
+        return message.reply(replyMessage);
+    }
+
+    // Resolver alias
+    const resolvedCommand = commandAliases[command] || command;
+
     try {
-        // Envolvemos la ejecución del comando en el manejador de reacciones.
         await handleReaction(message, (async () => {
             console.log(`(Handler) -> Comando recibido: "${command}"`);
 
-            if (countdownCommands.includes(command)) {
-                replyMessage = handleCountdown(command);
-                await message.reply(replyMessage);
+            const handler = commandMap[resolvedCommand];
+            
+            if (!handler) {
+                console.warn(`Comando no encontrado en el mapa: "${resolvedCommand}"`);
                 return;
             }
 
-            switch (command) {
-                case 'tabla':
-                case 'ligatabla':
-                    replyMessage = await getLeagueTable();
-                    break;
-                case 'prox':
-                case 'ligapartidos':
-                    replyMessage = await getLeagueUpcomingMatches();
-                    break;
-                case 'partidos':
-                    replyMessage = await getMatchDaySummary();
-                    break;
-                case 'champion':
-                    replyMessage = await getChampionsMatches();
-                    break;
-                case 'tchampion':
-                    replyMessage = await getChampionsStandings();
-                    break;
-                case 'metro':
-                    // El servicio ya devuelve el mensaje completo con formato
-                    replyMessage = await metroService.getMetroStatus();
-                    break;
-                case 'tclasi': case 'selecciontabla': replyMessage = await nationalTeamService.getQualifiersTable(); break;
-                case 'clasi': case 'seleccionpartidos': replyMessage = await nationalTeamService.getQualifiersMatches(); break;
-                case 'valores': replyMessage = await economyService.getEconomicIndicators(); break;
-                case 'horoscopo':
-                    const signo = message.body.split(' ')[1];
-                    if (!signo) {
-                        replyMessage = "Por favor, escribe un signo. Ej: `!horoscopo aries`";
-                    } else {
-                        const horoscopeResult = await horoscopeService.getHoroscope(signo);
-                        await message.reply(horoscopeResult.text);
-                        if (horoscopeResult.imagePath) {
-                            const media = MessageMedia.fromFilePath(horoscopeResult.imagePath);
-                            await client.sendMessage(message.from, media);
-                        }
-                    }
-                    break;
-                // El comando 'bencina' fue eliminado del proyecto.
-                case 'trstatus':
-                    replyMessage = await externalService.getTraductorStatus();
-                    break;
-                case 'transbank':
-                    const now = Date.now();
-                    const timeSinceLastRequest = (now - lastTransbankRequestTimestamp) / 1000;
-
-                    if (timeSinceLastRequest < TRANSBANK_COOLDOWN_SECONDS) {
-                        const timeLeft = Math.ceil(TRANSBANK_COOLDOWN_SECONDS - timeSinceLastRequest);
-                        replyMessage = `⏳ El comando !transbank está en cooldown. Por favor, espera ${timeLeft} segundos.`;
-                    } else {
-                        replyMessage = await getTransbankStatus();
-                        lastTransbankRequestTimestamp = Date.now(); // Actualizamos el timestamp
-                    }
-                    break;
-                case 'ping': replyMessage = await handlePing(message); break;
-                case 'feriados': replyMessage = await handleFeriados(); break;
-                case 'far': replyMessage = await handleFarmacias(message); break;
-                case 'clima': replyMessage = await handleClima(message); break;
-                case 'sismos': replyMessage = await handleSismos(); break;
-                case 'bus': await handleBus(message, client); break;
-                case 'sec': case 'secrm': replyMessage = await handleSec(message); break;
-                case 'menu': case 'comandos': replyMessage = handleMenu(); break;
-                case 'wiki': replyMessage = await handleWikiSearch(message); break;
-                case 'noticias': replyMessage = await handleNews(message); break;
-                case 'g': replyMessage = await handleGoogleSearch(message); break;
-                case 'pat': case 'patente': await handlePatenteSearch(message); break;
-                case 's': await handleSticker(client, message); break;
-                case 'audios': case 'sonidos': replyMessage = handleAudioList(); break;
-                case 'chiste': await handleJoke(client, message); break;
-                case 'ticket': case 'ticketr': case 'tickete': replyMessage = handleTicket(message); break;
-                case 'caso': case 'ecaso': case 'icaso': replyMessage = await handleCaso(message); break;
-                case 'ayuda': replyMessage = await handleAiHelp(message); break;
-                case 'num': case 'tel': await handlePhoneSearch(client, message); break;
-                case 'tne': case 'pase': await handleTneSearch(message); break;
-                case 'whois': case 'net': await handleNetworkQuery(message); break;
-                case 'nic': await handleNicClSearch(message); break;
-                case 'id':
-                    console.log('ID de este chat:', message.from);
-                    message.reply(`ℹ️ El ID de este chat es:\n${message.from}`);
-                    break;
-                case 'random': case 'dato': case 'curiosidad': 
-                    const randomData = await handleRandom();
-                    if (randomData.type === 'image' && randomData.media_url) {
-                        try {
-                            const media = await MessageMedia.fromUrl(randomData.media_url);
-                            await client.sendMessage(message.from, media, { caption: randomData.caption });
-                        } catch (err) {
-                            console.error("Error al enviar imagen random:", err);
-                            await message.reply(randomData.caption + "\n\n(No pude cargar la imagen 😢)");
-                        }
-                    } else {
-                        replyMessage = randomData.caption;
-                    }
-                    break;
-                case 'toimg':
-                    if (!message.hasQuotedMsg) {
-                        replyMessage = 'Debes responder a un sticker para convertirlo en imagen.';
-                        break;
-                    }
-                    const quotedMsg = await message.getQuotedMessage();
-                    if (quotedMsg.hasMedia && quotedMsg.type === 'sticker') {
-                        const stickerMedia = await quotedMsg.downloadMedia();
-                        // Al enviar el 'media' sin opciones de sticker, se envía como imagen/video.
-                        await client.sendMessage(message.from, stickerMedia, { 
-                            caption: '¡Listo! Aquí tienes tu sticker como imagen. ✨' 
-                        });
-                    } else {
-                        replyMessage = 'El mensaje al que respondiste no es un sticker.';
-                    }
-                    break;
-                /* ELIMINADO POR SOLICITUD DE USUARIO
-                case 'resume':
-                    // ... (Lógica eliminada)
-                    break;
-                */
-                default: break;
-            }
-
+            const replyMessage = await handler(client, message);
+            
             if (replyMessage) {
                 await message.reply(replyMessage);
             }
