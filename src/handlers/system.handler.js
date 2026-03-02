@@ -4,6 +4,7 @@
 const os = require('os');
 const si = require('systeminformation');
 const axios = require('axios');
+const ping = require('ping');
 const packageInfo = require('../../package.json');
 
 // --- Contadores globales de estadísticas del bot ---
@@ -69,13 +70,14 @@ function createProgressBar(percentage, length = 10) {
     return `${emoji} ${bar} ${percentage}%`;
 }
 
-// Mide el tiempo de respuesta a Internet (ping) usando un endpoint ligero y timeout
+// Mide el tiempo de respuesta a Internet (ping) real usando ICMP
 async function checkPing(timeoutMs = 3000) {
     try {
-        const start = Date.now();
-        await axios.get('https://www.google.com/generate_204', { timeout: timeoutMs });
-        const end = Date.now();
-        return end - start;
+        const timeoutSec = Math.max(1, Math.floor(timeoutMs / 1000));
+        const res = await ping.promise.probe('google.com', {
+            timeout: timeoutSec
+        });
+        return res.alive ? Math.round(res.time) : null;
     } catch (error) {
         return null;
     }
@@ -266,7 +268,15 @@ async function handlePing(message) {
     const osInfo = cache.osInfo || 'Desconocido';
     const temperature = cache.temperature;
 
-    const lag = Date.now() - startCommandTime;
+    // Calcular latencia real del mensaje vs latencia de ejecución
+    const executeLag = Date.now() - startCommandTime;
+    let messageLag = 'N/A';
+    if (message.timestamp) {
+        // timestamp de whatsapp web js viene en segundos, convertimos a ms
+        const msgTimeMs = message.timestamp * 1000;
+        messageLag = Math.max(0, Date.now() - msgTimeMs) + ' ms';
+    }
+
     const systemUptime = formatUptime(os.uptime());
     const botUptime = formatUptime((Date.now() - BOT_STATS.startTime) / 1000);
     const nodeVersion = process.version;
@@ -316,7 +326,8 @@ async function handlePing(message) {
 
 🤖 *BOT*
 🏓 Ping Google: ${safe(pingTime, 'N/A')} ms
-⏳ Latencia: ${lag} ms
+⏳ Latencia msje: ${messageLag}
+⏱️ Tiempo ejec.: ${executeLag} ms
 📊 Mensajes: ${BOT_STATS.messagesProcessed}
 ⚡ Comandos: ${BOT_STATS.commandsExecuted}
 👥 Usuarios: ${BOT_STATS.uniqueUsers.size}
