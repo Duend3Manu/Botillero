@@ -268,14 +268,16 @@ async function handlePing(message) {
     const osInfo = cache.osInfo || 'Desconocido';
     const temperature = cache.temperature;
 
+    // Obtener latencia de la API de WhatsApp mediante una reacción
+    const waStart = Date.now();
+    try {
+        await message.react('🏓');
+    } catch(e) {}
+    const waLatency = Date.now() - waStart;
+
     // Calcular latencia real del mensaje vs latencia de ejecución
     const executeLag = Date.now() - startCommandTime;
-    let messageLag = 'N/A';
-    if (message.timestamp) {
-        // timestamp de whatsapp web js viene en segundos, convertimos a ms
-        const msgTimeMs = message.timestamp * 1000;
-        messageLag = Math.max(0, Date.now() - msgTimeMs) + ' ms';
-    }
+    // (removido messageLag del código, usaremos waLatency)
 
     const systemUptime = formatUptime(os.uptime());
     const botUptime = formatUptime((Date.now() - BOT_STATS.startTime) / 1000);
@@ -326,7 +328,7 @@ async function handlePing(message) {
 
 🤖 *BOT*
 🏓 Ping Google: ${safe(pingTime, 'N/A')} ms
-⏳ Latencia msje: ${messageLag}
+⏳ Latencia WA: ${waLatency} ms
 ⏱️ Tiempo ejec.: ${executeLag} ms
 📊 Mensajes: ${BOT_STATS.messagesProcessed}
 ⚡ Comandos: ${BOT_STATS.commandsExecuted}
