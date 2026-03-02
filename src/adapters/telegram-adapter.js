@@ -40,34 +40,29 @@ class TelegramMedia {
 
     /**
      * Descarga un archivo desde una URL y lo retorna como TelegramMedia.
-     * @param {string} url - URL del archivo a descargar
+     * Usa axios con timeout completo (conexión + descarga) para evitar cuelgues.
+     * @param {string} url - URL del archivo (generalmente de bot.getFileLink())
      * @returns {Promise<TelegramMedia>}
      */
     static async fromUrl(url) {
-        const https = url.startsWith('https') ? require('https') : require('http');
+        const axios = require('axios');
 
-        return new Promise((resolve, reject) => {
-            https.get(url, { timeout: 15000 }, (res) => {
-                if (res.statusCode !== 200) {
-                    reject(new Error(`Error HTTP ${res.statusCode} al descargar: ${url}`));
-                    res.resume();
-                    return;
-                }
-
-                const chunks = [];
-                res.on('data', chunk => chunks.push(chunk));
-                res.on('end', () => {
-                    const buffer = Buffer.concat(chunks);
-                    const base64 = buffer.toString('base64');
-                    const contentType = res.headers['content-type'] || 'application/octet-stream';
-                    // Extraer mimetype limpio (sin parámetros como "; charset=utf-8")
-                    const mimetype = contentType.split(';')[0].trim();
-                    const filename = path.basename(url.split('?')[0]) || 'file';
-                    resolve(new TelegramMedia(mimetype, base64, filename));
-                });
-                res.on('error', reject);
-            }).on('error', reject);
+        const response = await axios.get(url, {
+            responseType: 'arraybuffer',
+            timeout: 20000,  // 20s timeout completo (conexión + descarga)
+            maxContentLength: 50 * 1024 * 1024, // máx 50MB
+            headers: {
+                'User-Agent': 'Botillero/2.0'
+            }
         });
+
+        const buffer = Buffer.from(response.data);
+        const base64 = buffer.toString('base64');
+        const contentType = response.headers['content-type'] || 'application/octet-stream';
+        const mimetype = contentType.split(';')[0].trim();
+        const filename = path.basename(url.split('?')[0]) || 'file';
+
+        return new TelegramMedia(mimetype, base64, filename);
     }
 }
 

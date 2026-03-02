@@ -23,7 +23,8 @@ const services = {
     get personalSearch() { return require('./personalsearch.handler'); },
     get network() { return require('./network.handler'); },
     get fap() { return require('./fap.handler'); },
-    get group() { return require('./group.handler'); }
+    get group() { return require('./group.handler'); },
+    get ruleta() { return require('./ruleta.handler'); }
 };
 
 // --- Cooldowns para comandos específicos ---
@@ -82,18 +83,29 @@ async function handleStickerToImage(client, message) {
     if (!message.hasQuotedMsg) {
         return 'Debes responder a un sticker para convertirlo en imagen.';
     }
-    
+
     const quotedMsg = await message.getQuotedMessage();
-    if (quotedMsg.hasMedia && quotedMsg.type === 'sticker') {
+    if (!quotedMsg || !quotedMsg.hasMedia) {
+        return 'El mensaje al que respondiste no tiene media.';
+    }
+    if (quotedMsg.type !== 'sticker') {
+        return 'El mensaje al que respondiste no es un sticker.';
+    }
+
+    try {
         const stickerMedia = await quotedMsg.downloadMedia();
-        await client.sendMessage(message.from, stickerMedia, { 
-            caption: '¡Listo! Aquí tienes tu sticker como imagen. ✨' 
+        // Enviamos con sendAsPhoto:true para que llegue como imagen visible, no como sticker
+        await message.reply(stickerMedia, undefined, {
+            sendAsPhoto: true,
+            caption: '🖼️ ¡Aquí tienes tu sticker como imagen!'
         });
         return null;
+    } catch (err) {
+        console.error('(toimg) -> Error:', err.message);
+        return '❌ No pude convertir el sticker a imagen.';
     }
-    
-    return 'El mensaje al que respondiste no es un sticker.';
 }
+
 
 // --- Mapa de Alias ---
 const commandAliases = {
@@ -145,7 +157,14 @@ const commandMap = {
     'sismos': () => services.utility.handleSismos(),
     'bus': (client, msg) => services.utility.handleBus(msg, client),
     'sec': (_, msg) => services.utility.handleSec(msg),
-    'menu': () => services.utility.handleMenu(),
+    'menu': async (_, msg) => {
+        const { getMainMenuKeyboard } = require('./menu.handler');
+        await msg.reply('🤖 *Menú Principal — Botillero*\n\nSelecciona una categoría:', undefined, {
+            parse_mode: 'Markdown',
+            reply_markup: getMainMenuKeyboard()
+        });
+        return null; // Ya enviamos el mensaje directamente, no retornar texto
+    },
     'recap': (_, msg) => services.utility.handleRecap(msg),
     
     // Búsquedas
@@ -181,6 +200,11 @@ const commandMap = {
     // FAP y grupos
     'fap': (client, msg) => services.fap.handleFapSearch(client, msg),
     'todos': (client, msg) => services.group.handleTagAll(client, msg),
+
+    // Ruleta y puntos
+    'ruleta': (client, msg) => services.ruleta.handleRuleta(client, msg),
+    'puntos': (client, msg) => services.ruleta.handlePuntos(client, msg),
+    'ranking': (client, msg) => services.ruleta.handleRanking(client, msg),
     
     // ID del chat
     'id': (_, msg) => {
@@ -264,7 +288,10 @@ async function commandHandler(client, message) {
 
             const replyMessage = await handler(client, message);
             
-            if (replyMessage) {
+            // Solo hacer reply si el handler retornó un STRING.
+            // Si retornó null/undefined → ya envió el mensaje directamente.
+            // Si retornó un objeto (Message de Telegram) → también ya lo envió, ignorar.
+            if (replyMessage && typeof replyMessage === 'string') {
                 await message.reply(replyMessage);
             }
         })());

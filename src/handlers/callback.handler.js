@@ -209,6 +209,71 @@ async function handleCallback(bot, callbackQuery) {
             return;
         }
 
+        // --- Pack de stickers ---
+        if (data.startsWith('sticker_pack:')) {
+            const targetUserId = parseInt(data.split(':')[1]);
+            const requestUserId = callbackQuery.from.id;
+
+            // Solo el propietario puede agregar al pack
+            if (targetUserId !== requestUserId) {
+                await bot.answerCallbackQuery(callbackQuery.id, {
+                    text: '⛔ Solo tú puedes agregar stickers a tu propio pack.',
+                    show_alert: true
+                });
+                return;
+            }
+
+            const {
+                consumeStickerSession,
+                packExists,
+                createStickerPack,
+                addToStickerPack,
+                getPackShortName
+            } = require('./sticker-pack.handler');
+
+            const fileId = consumeStickerSession(targetUserId);
+
+            if (!fileId) {
+                await bot.answerCallbackQuery(callbackQuery.id, {
+                    text: '⏰ La sesión expiró. Crea el sticker de nuevo con !s.',
+                    show_alert: true
+                });
+                return;
+            }
+
+            // Deshabilitar el botón mientras procesa
+            await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId });
+
+            try {
+                const botInfo = await bot.getMe();
+                const botUsername = botInfo.username;
+                const exists = await packExists(targetUserId, botUsername);
+
+                if (exists) {
+                    await addToStickerPack(targetUserId, fileId, botUsername);
+                    const packName = `${getPackShortName(targetUserId)}_by_${botUsername}`;
+                    await bot.editMessageText(
+                        `✅ <b>¡Sticker agregado al pack!</b>\n\n📦 Ver pack: t.me/addstickers/${packName}`,
+                        { chat_id: chatId, message_id: messageId, parse_mode: 'HTML' }
+                    );
+                } else {
+                    await createStickerPack(targetUserId, fileId, botUsername);
+                    const packName = `${getPackShortName(targetUserId)}_by_${botUsername}`;
+                    await bot.editMessageText(
+                        `🎉 <b>¡Pack creado exitosamente!</b>\n\n📦 <b>Nombre:</b> Botillero 🎰\n🔗 Ver pack: t.me/addstickers/${packName}`,
+                        { chat_id: chatId, message_id: messageId, parse_mode: 'HTML' }
+                    );
+                }
+            } catch (packErr) {
+                console.error('(StickerPack) -> Error:', packErr.message);
+                await bot.editMessageText(
+                    `❌ <b>Error al gestionar el pack:</b>\n<code>${packErr.message}</code>`,
+                    { chat_id: chatId, message_id: messageId, parse_mode: 'HTML' }
+                );
+            }
+            return;
+        }
+
     } catch (error) {
         console.error('❌ Error procesando callback:', error);
         

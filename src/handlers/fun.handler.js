@@ -185,14 +185,28 @@ async function handleSticker(client, message) {
         }
 
         const webpMedia = MessageMedia.fromFilePath(outputFilePath);
+        const { saveStickerSession, getStickerPackKeyboard } = require('./sticker-pack.handler');
 
-        // Enviar como sticker (Telegram: usar sendSticker si el mensaje lo soporta,
-        // o fallback a sendDocument con el WebP)
+        // Enviar como sticker y capturar el mensaje enviado para obtener el file_id
+        let sentMsg = null;
         if (typeof message.sendSticker === 'function') {
-            await message.sendSticker(webpMedia);
+            sentMsg = await message.sendSticker(webpMedia);
         } else {
-            // Fallback: enviar como archivo WebP normal
             await message.reply(webpMedia);
+        }
+
+        // Si obtuvimos el file_id del sticker enviado, ofrecer añadir al pack
+        const fileId = sentMsg?.sticker?.file_id;
+        const userId = message.author || message.from;
+
+        if (fileId && userId) {
+            saveStickerSession(userId, fileId);
+            // Enviar mensaje de seguimiento con botón inline
+            await message.reply(
+                '📦 *¿Agregar este sticker al pack de Botillero?*',
+                undefined,
+                { reply_markup: getStickerPackKeyboard(userId) }
+            );
         }
 
         // Reacción de éxito

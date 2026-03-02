@@ -72,20 +72,42 @@ bot.on('message', async (msg) => {
     const startTime = Date.now();
     
     try {
-        // Solo procesar mensajes de texto
-        if (!msg.text) return;
+        // Solo procesar mensajes que tengan texto o caption (comandos).
+        // Stickers/fotos/videos sin texto se ignoran — el comando !s llega siempre como
+        // mensaje de texto en respuesta a la media, no como la media en sí.
+        const msgText = msg.text || msg.caption || '';
+        if (!msgText) return;
         
         const userId = msg.from.id;
         const chatId = msg.chat.id;
         
         // Crear objeto de mensaje compatible con el handler existente
         const adaptedMessage = {
-            body: msg.text,
+            body: msgText,
             from: chatId.toString(),
             fromMe: false,
             author: userId.toString(),
             timestamp: msg.date,
             _raw: msg,
+
+            // Media del mensaje principal (para !s enviando foto/video directamente)
+            hasMedia: !!(msg.photo || msg.video || msg.animation || msg.document || msg.sticker),
+            type: msg.sticker ? 'sticker' :
+                  msg.photo ? 'image' :
+                  msg.video ? 'video' :
+                  msg.animation ? 'video' :
+                  msg.audio ? 'audio' : 'chat',
+
+            // Descargar media del mensaje principal
+            downloadMedia: async () => {
+                const { TelegramMedia } = require('./src/adapters/telegram-adapter');
+                // Prioridad: foto (última versión = mayor calidad), video, animación, documento, sticker
+                const fileObj = (msg.photo && msg.photo[msg.photo.length - 1])
+                    || msg.video || msg.animation || msg.document || msg.sticker;
+                if (!fileObj) throw new Error('No hay media descargable en este mensaje');
+                const fileLink = await bot.getFileLink(fileObj.file_id);
+                return TelegramMedia.fromUrl(fileLink);
+            },
             
             // Método para responder
             reply: async (text, quotedMsg, options = {}) => {
@@ -104,20 +126,20 @@ bot.on('message', async (msg) => {
                             filename: media.filename,
                             contentType: media.mimetype
                         });
-                    } else if (media.mimetype === 'image/webp') {
-                        // WebP → intentar como sticker
+                    } else if (media.mimetype === 'image/webp' && !options.sendAsPhoto) {
+                        // WebP → sticker
                         try {
                             return await bot.sendSticker(chatId, fileBuffer, {
                                 reply_to_message_id: msg.message_id
-                            });
-                        } catch (stickerErr) {
-                            console.warn('(reply) -> Falló sendSticker, enviando como documento:', stickerErr.message);
-                            return await bot.sendDocument(chatId, fileBuffer, {
-                                reply_to_message_id: msg.message_id,
-                                caption: options.caption || ''
                             }, {
                                 filename: media.filename || 'sticker.webp',
                                 contentType: 'image/webp'
+                            });
+                        } catch (stickerErr) {
+                            console.warn('(reply) -> Falló sendSticker, enviando como foto:', stickerErr.message);
+                            return await bot.sendPhoto(chatId, fileBuffer, {
+                                reply_to_message_id: msg.message_id,
+                                caption: options.caption || ''
                             });
                         }
                     } else if (media.mimetype.startsWith('image/')) {
@@ -244,6 +266,9 @@ bot.on('message', async (msg) => {
                     const fileBuffer = Buffer.from(media.data, 'base64');
                     return await bot.sendSticker(chatId, fileBuffer, {
                         reply_to_message_id: msg.message_id
+                    }, {
+                        filename: media.filename || 'sticker.webp',
+                        contentType: 'image/webp'
                     });
                 }
             }
@@ -252,17 +277,17 @@ bot.on('message', async (msg) => {
         // Incrementar estadísticas
         incrementStats('message', chatId.toString());
         
-        console.log(`📨 Mensaje recibido: "${msg.text}" (de chat: ${chatId})`);
+        console.log(`📨 Mensaje recibido: "${msgText}" (de chat: ${chatId})`);
         
         // Guardar mensaje en buffer (solo grupos, solo no-comandos)
-        if (!msg.text.startsWith('!') && !msg.text.startsWith('/')) {
+        if (!msgText.startsWith('!') && !msgText.startsWith('/')) {
             try {
                 const chat = await bot.getChat(chatId);
                 if (chat.type === 'group' || chat.type === 'supergroup') {
                     messageBuffer.addMessage(chatId.toString(), {
                         user: msg.from.first_name || msg.from.username || 'Usuario',
                         userId: userId.toString(),
-                        message: msg.text,
+                        message: msgText,
                         timestamp: msg.date * 1000 // Convertir a ms
                     });
                 }
@@ -272,15 +297,15 @@ bot.on('message', async (msg) => {
         }
         
         // Determinar si es un comando
-        const isCommand = msg.text.startsWith('!') || msg.text.startsWith('/');
+        const isCommand = msgText.startsWith('!') || msgText.startsWith('/');
         
         if (isCommand) {
             // Incrementar contador de comandos
             incrementStats('command', chatId.toString());
             
             // Normalizar comandos de Telegram (/ -> !)
-            if (msg.text.startsWith('/')) {
-                adaptedMessage.body = '!' + msg.text.substring(1);
+            if (msgText.startsWith('/')) {
+                adaptedMessage.body = '!' + msgText.substring(1);
             }
         }
         
