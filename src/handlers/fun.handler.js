@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
 const ffmpeg = require('fluent-ffmpeg');
-const { MessageMedia } = require('../adapters/wwebjs-adapter');
+const { MessageMedia } = require('../adapters/wwebjs-adapter'); // → TelegramMedia via adaptador
 
 // --- Sistema de Caché de Medias ---
 const mediaCache = [];
@@ -185,13 +185,15 @@ async function handleSticker(client, message) {
         }
 
         const webpMedia = MessageMedia.fromFilePath(outputFilePath);
-        
-        // Enviar como sticker
-        await client.sendMessage(message.from, webpMedia, {
-            sendMediaAsSticker: true,
-            stickerName: 'Botillero',
-            stickerAuthor: '🤖'
-        });
+
+        // Enviar como sticker (Telegram: usar sendSticker si el mensaje lo soporta,
+        // o fallback a sendDocument con el WebP)
+        if (typeof message.sendSticker === 'function') {
+            await message.sendSticker(webpMedia);
+        } else {
+            // Fallback: enviar como archivo WebP normal
+            await message.reply(webpMedia);
+        }
 
         // Reacción de éxito
         try { await message.react('✅'); } catch (e) {}
@@ -282,7 +284,8 @@ async function handleSound(client, message, command) {
             // Ignoramos el error cosmético
         }
         const media = MessageMedia.fromFilePath(audioPath);
-        await message.reply(media, undefined, { sendAudioAsVoice: false });
+        // message.reply detecta que es audio por el mimetype y llama sendAudio en Telegram
+        await message.reply(media);
     } catch (error) {
         if (error.code === 'ENOENT') {
             message.reply(`No se encontró el archivo de audio para "!${command}".`);
@@ -310,7 +313,8 @@ async function handleJoke(client, message) {
         const audioPath = path.join(folderPath, files[randomIndex]);
         
         const media = MessageMedia.fromFilePath(audioPath);
-        await message.reply(media, undefined, { sendAudioAsVoice: false });
+        // message.reply detecta que es audio y llama sendAudio en Telegram
+        await message.reply(media);
     } catch (error) {
         if (error.code === 'ENOENT') {
             return message.reply("La carpeta de chistes no está configurada.");

@@ -2,12 +2,12 @@
 "use strict";
 
 /**
- * Adaptador para whatsapp-web.js
- * Exporta las clases principales que se usan en el proyecto
+ * Adaptador de compatibilidad — re-exporta TelegramMedia con el nombre
+ * "MessageMedia" para que los handlers existentes no necesiten cambios.
  */
 
-const { MessageMedia } = require('whatsapp-web.js');
+const { TelegramMedia } = require('./telegram-adapter');
 
 module.exports = {
-    MessageMedia
+    MessageMedia: TelegramMedia
 };

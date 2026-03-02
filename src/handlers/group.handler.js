@@ -3,53 +3,69 @@
 
 /**
  * Etiqueta a todos los participantes de un grupo.
- * @param {Client} client - El objeto del cliente de WhatsApp.
- * @param {Message} message - El objeto del mensaje que activó el comando.
+ * Implementación para Telegram usando getChatAdministrators y menciones por username.
+ * @param {Object} client - Instancia del bot de Telegram (node-telegram-bot-api)
+ * @param {Object} message - Mensaje adaptado (con _raw.chat.id, etc.)
  */
 async function handleTagAll(client, message) {
     try {
+        // --- Verificar que es un grupo ---
         const chat = await message.getChat();
-
-        // 1. Verificar si el chat es un grupo
         if (!chat.isGroup) {
             return message.reply("Este comando solo se puede usar en grupos.");
         }
 
-        // --- MEJORA 1: Seguridad (Solo Admins) ---
-        const authorId = message.author || message.from;
-        const participant = chat.participants.find(p => p.id._serialized === authorId);
-        
-        if (!participant || !participant.isAdmin) {
+        const chatId = message.from; // En Telegram el ID del chat
+
+        // --- Verificar que el usuario es administrador ---
+        const senderId = parseInt(message.author || message._raw?.from?.id);
+        let isAdmin = false;
+
+        try {
+            const admins = await client.getChatAdministrators(chatId);
+            isAdmin = admins.some(a => a.user.id === senderId);
+        } catch (adminErr) {
+            console.error("(TagAll) -> Error obteniendo admins:", adminErr.message);
+            // En caso de error, permitir igualmente (puede ser chat privado administrado)
+        }
+
+        if (!isAdmin) {
             return message.reply("👮‍♂️ Alto ahí. Solo los administradores pueden invocar a todos.");
         }
 
-        // --- MEJORA 2: Mensaje Personalizado ---
-        // Limpiamos el comando del inicio para obtener solo el texto del mensaje
+        // --- Mensaje personalizado (extraer texto después del comando) ---
         const customText = message.body.replace(/^([!/])\w+\s*/i, '').trim();
         let text = customText ? `📢 *${customText}*\n\n` : "📢 *Atención grupo:*\n\n";
-        
-        let mentions = [];
 
-        // --- MEJORA 3: Optimización (Carga Paralela) ---
-        // 1. Filtramos al propio bot para que no se auto-etiquete (es redundante)
-        const botId = client.info.wid._serialized;
-        const participantsToTag = chat.participants.filter(p => p.id._serialized !== botId);
+        // --- Obtener miembros con username para mencionar ---
+        try {
+            const admins = await client.getChatAdministrators(chatId);
+            // En Telegram Bot API solo podemos obtener administradores fácilmente
+            // Los miembros regulares requieren permisos especiales o tracking propio.
+            // Mencionamos a los admins disponibles y notificamos la limitación.
+            const mentions = [];
 
-        // 2. Carga robusta: Si falla un contacto, no rompemos todo el comando
-        const contactPromises = participantsToTag.map(p => 
-            client.getContactById(p.id._serialized).catch(() => null)
-        );
-        const results = await Promise.all(contactPromises);
-        const contacts = results.filter(c => c !== null); // Filtramos los que fallaron
+            for (const admin of admins) {
+                const user = admin.user;
+                if (!user.is_bot) {
+                    if (user.username) {
+                        text += `@${user.username} `;
+                        mentions.push(user.username);
+                    } else {
+                        // Sin username: usar nombre (no genera mención clicable pero es visible)
+                        text += `${user.first_name} `;
+                    }
+                }
+            }
 
-        for (const contact of contacts) {
-            mentions.push(contact);
-            text += `@${contact.id.user} `;
+            text += '\n\n_ℹ️ Nota: En Telegram solo se pueden mencionar administradores automáticamente._';
+
+            await message.reply(text);
+
+        } catch (err) {
+            console.error("(TagAll) -> Error obteniendo membros:", err.message);
+            await message.reply("📢 " + (customText || "Atención grupo") + "\n\n_(No se pudo obtener la lista de miembros)_");
         }
-
-        // 4. Enviar el mensaje con el texto y las menciones
-        // Se envía al ID del chat, y se pasa la opción 'mentions'
-        await chat.sendMessage(text, { mentions });
 
     } catch (e) {
         console.error("Error en handleTagAll:", e);
