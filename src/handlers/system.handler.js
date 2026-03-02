@@ -327,9 +327,9 @@ async function handlePing(message) {
 🖥️ OS: ${osInfo}
 
 🤖 *BOT*
-🏓 Ping Google: ${safe(pingTime, 'N/A')} ms
-⏳ Latencia WA: ${waLatency} ms
-⏱️ Tiempo ejec.: ${executeLag} ms
+🏓 Ping Google: ${pingTime ? (pingTime / 1000).toFixed(3) + ' s' : 'N/A'}
+⏳ Latencia WA: ${(waLatency / 1000).toFixed(3)} s
+⏱️ Tiempo ejec.: ${(executeLag / 1000).toFixed(3)} s
 📊 Mensajes: ${BOT_STATS.messagesProcessed}
 ⚡ Comandos: ${BOT_STATS.commandsExecuted}
 👥 Usuarios: ${BOT_STATS.uniqueUsers.size}
