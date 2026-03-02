@@ -113,7 +113,10 @@ const commandAliases = {
     'secrm': 'sec',
     'dato': 'random',
     'curiosidad': 'random',
-    'pase': 'tne'
+    'pase': 'tne',
+    'precio': 'oferta',
+    'desc': 'oferta',
+    'producto': 'oferta'
 };
 
 // --- Command Map (Reemplaza el switch gigante) ---
@@ -149,6 +152,7 @@ const commandMap = {
     'wiki': (_, msg) => services.search.handleWikiSearch(msg),
     'noticias': (_, msg) => services.search.handleNews(msg),
     'g': (_, msg) => services.search.handleGoogleSearch(msg),
+    'oferta': (_, msg) => services.search.handleDealsSearch(msg),
     'pat': (_, msg) => services.personalSearch.handlePatenteSearch(msg),
     'audios': () => services.fun.handleAudioList(),
     

@@ -134,8 +134,59 @@ async function handleGoogleSearch(message) {
     }
 }
 
+// ─────────────────────────────────────────────
+// BÚSQUEDA DE OFERTAS (SoloTodo + Knasta + Descuentos Rata)
+// ─────────────────────────────────────────────
+const { searchAllDeals, formatPrice } = require('../services/deals.service');
+
+async function handleDealsSearch(message) {
+    const searchTerm = message.body.replace(/^([!/])oferta\s*/i, '').trim();
+
+    if (!searchTerm) {
+        return '🛒 Escribe un producto para buscar ofertas. Ejemplo: `!oferta zapatillas nike`';
+    }
+
+    try {
+        await message.react('⏳');
+
+        const results = await searchAllDeals(searchTerm);
+
+        if (!results || results.length === 0) {
+            await message.react('❌');
+            return `😕 No encontré ofertas para *"${searchTerm}"* en este momento. Intenta con otro término.`;
+        }
+
+        let msg = `🔍 Ofertas para *"${searchTerm}"*\n`;
+        msg += `_(${results.length} resultado${results.length !== 1 ? 's' : ''}, ordenados por mayor descuento)_\n\n`;
+
+        const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
+
+        results.forEach((p, i) => {
+            const discountStr = p.descuento > 0 ? ` — *-${p.descuento}%* 🔥` : '';
+            const precioStr   = formatPrice(p.precio);
+            const anterior    = p.precioOriginal && p.precioOriginal > p.precio
+                ? ` _(antes ${formatPrice(p.precioOriginal)})_`
+                : '';
+
+            msg += `${emojis[i] || `${i + 1}.`} *${p.nombre}*${discountStr}\n`;
+            msg += `   💰 ${precioStr}${anterior}\n`;
+            msg += `   🏪 ${p.tienda} | ${p.fuente}\n`;
+            msg += `   🔗 ${p.url}\n\n`;
+        });
+
+        await message.react('✅');
+        return msg.trim();
+
+    } catch (err) {
+        console.error('[handleDealsSearch] Error:', err.message);
+        await message.react('❌');
+        return 'Ocurrió un error al buscar ofertas. Intenta nuevamente.';
+    }
+}
+
 module.exports = {
     handleWikiSearch,
     handleNews,
-    handleGoogleSearch
+    handleGoogleSearch,
+    handleDealsSearch
 };

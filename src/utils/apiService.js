@@ -10,7 +10,7 @@ const axios = require('axios');
  * @returns {Promise<object>} Un objeto con el resultado de la consulta.
  */
 async function getPatenteDataFormatted(patente) {
-    console.log(`(apiService) -> Buscando patente real: ${patente}`);
+    console.log(`(apiService) -> Buscando patente: ${patente}`);
     const apiUrl = `https://infoflow.cloud/patlite.php?pat=${encodeURIComponent(patente)}`;
     const maxIntentos = 5;
     let apiResponse = null;
@@ -18,16 +18,24 @@ async function getPatenteDataFormatted(patente) {
     for (let intento = 1; intento <= maxIntentos; intento++) {
         try {
             const response = await axios.get(apiUrl, {
-                headers: { 'User-Agent': 'tuCulitoSacallama-SV' }, // Usando el User-Agent de tu script original
+                headers: { 'User-Agent': 'BotilleroBot/1.0' },
                 timeout: 10000,
             });
 
             if (response.status === 200 && response.data && JSON.stringify(response.data).length > 10) {
                 apiResponse = response.data;
-                break; // Si tenemos respuesta, salimos del bucle
+                break;
+            } else {
+                console.warn(`(apiService) Intento ${intento}: respuesta vacía o corta para patente ${patente}. Status: ${response.status}`);
             }
         } catch (error) {
-            console.error(`Intento ${intento} fallido para patente ${patente}: ${error.message}`);
+            if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+                console.error(`(apiService) Intento ${intento}: TIMEOUT para patente ${patente}`);
+            } else if (error.response) {
+                console.error(`(apiService) Intento ${intento}: Error HTTP ${error.response.status} para patente ${patente}`);
+            } else {
+                console.error(`(apiService) Intento ${intento}: Error de red para patente ${patente} → ${error.message}`);
+            }
         }
         if (intento < maxIntentos) await new Promise(resolve => setTimeout(resolve, 500));
     }
@@ -36,11 +44,12 @@ async function getPatenteDataFormatted(patente) {
         return { error: true, message: `😕 Lo siento, el sistema está con alta demanda y no pude obtener los datos de la patente.\nPor favor, intenta nuevamente en unos minutos.` };
     }
 
-    if (apiResponse.valido === true && apiResponse.info?.Respuesta) {
+    // Validar que la estructura de la respuesta sea la esperada
+    if (apiResponse.valido === true && apiResponse.info && typeof apiResponse.info.Respuesta === 'object' && apiResponse.info.Respuesta !== null) {
         const info = apiResponse.info.Respuesta;
         const formatear = (valor, fallback = 'No disponible') => (valor && String(valor).trim() !== '') ? String(valor).trim() : fallback;
 
-        const mensaje = 
+        const mensaje =
 `🚗 *Información de la Patente*
 🔍 *Patente:* ${formatear(info.plate, patente.toUpperCase())}
 🚙 *Marca:* ${formatear(info.brand)}
@@ -56,12 +65,16 @@ async function getPatenteDataFormatted(patente) {
 
         return { error: false, data: mensaje };
     } else {
-        const errorMsg = `🚨 *Patente inválida*
+        // Loguear la respuesta real para facilitar el diagnóstico
+        const mensajeApi = apiResponse.mensaje || apiResponse.message || '';
+        console.warn(`(apiService) Respuesta no válida para patente ${patente}. valido=${apiResponse.valido}, mensaje API: "${mensajeApi}", estructura:`, JSON.stringify(apiResponse).substring(0, 300));
 
-La patente ingresada es *inválida* según el sistema, por favor revisa que esté bien escrita (6 caracteres, solo letras y números).
+        const errorMsg = `🚨 *Patente inválida o no encontrada*
+
+La patente *${patente}* no fue encontrada en el sistema.${mensajeApi ? `\n_Detalle: ${mensajeApi}_` : ''}
 
 🏍️ Si es una moto, agrega un '0' después de las letras. Ejemplo: \`AB0123\`.
-🚗 Para vehículos, la patente debe tener 6 caracteres, letras y números. Ejemplo: \`ABC123\`.`;
+🚗 Para vehículos, la patente debe tener 6 caracteres (letras y números). Ejemplo: \`ABC123\`.`;
         return { error: true, message: errorMsg };
     }
 }

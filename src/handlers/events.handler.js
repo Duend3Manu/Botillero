@@ -2,12 +2,26 @@
 "use strict";
 
 const { storeMessage, getOriginalMessage } = require('../utils/db.js');
+const { addToMediaCache } = require('./fun.handler.js');
 
 // Se activa cuando un usuario crea un mensaje
 async function handleMessageCreate(client, message) {
     if (!message.fromMe) {
         // Guardamos una copia de cada mensaje para poder compararlo si se edita
         storeMessage(message.id._serialized, message.body);
+
+        // Si el mensaje tiene media (imagen/gif/video), guardarlo en caché para stickers
+        if (message.hasMedia) {
+            try {
+                const media = await message.downloadMedia();
+                if (media && (media.mimetype.includes('image') || media.mimetype.includes('video'))) {
+                    addToMediaCache(message.id._serialized, media, media.mimetype, message.from);
+                }
+            } catch (err) {
+                // Ignorar errores de descarga para no interrumpir el flujo
+                console.error('(MediaCache) -> Error al guardar media:', err.message);
+            }
+        }
     }
 }
 

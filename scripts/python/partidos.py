@@ -62,19 +62,32 @@ def obtener_y_formatear_partidos(codigo_liga, fecha):
 
 def main():
     fecha_hoy = datetime.now(ZONA_HORARIA_CHILE)
-    
+    fecha_manana = fecha_hoy + timedelta(days=1)
+
     for nombre_liga, codigo in LIGAS.items():
         print(f"\n*{nombre_liga}*")
-        
+
+        # --- Partidos de hoy ---
         partidos_de_hoy = obtener_y_formatear_partidos(codigo, fecha_hoy)
 
         if partidos_de_hoy:
-            print(f"📅 Partidos para hoy, {fecha_hoy.strftime('%d-%m-%Y')}:")
+            print(f"📅 *Hoy*, {formatear_fecha(fecha_hoy)}:")
             for partido in partidos_de_hoy:
                 print(partido)
+
+            # --- Partidos de mañana (solo si hoy tiene partidos) ---
+            partidos_manana = obtener_y_formatear_partidos(codigo, fecha_manana)
+            if partidos_manana:
+                print(f"\n📅 *Mañana*, {formatear_fecha(fecha_manana)}:")
+                for partido in partidos_manana:
+                    print(partido)
+            else:
+                print(f"\n🚫 No hay partidos programados para mañana.")
+
         else:
             print(f"🚫 No hay partidos programados para hoy.")
 
+            # Buscar la próxima fecha con partidos (desde mañana)
             encontrado_futuro = False
             for i in range(1, 8):
                 fecha_futura = fecha_hoy + timedelta(days=i)
@@ -86,7 +99,7 @@ def main():
                         print(partido)
                     encontrado_futuro = True
                     break
-            
+
             if not encontrado_futuro:
                 print("🚫 _No se encontraron partidos en los próximos 7 días._")
 

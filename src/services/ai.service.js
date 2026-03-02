@@ -132,7 +132,8 @@ async function generateConversationSummary(messages) {
     // Formatear conversación
     const conversationText = messages.map(m => {
         const time = new Date(m.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-        return `[${time}] ${m.user}: ${m.message}`;
+        const tag = m.userId ? `@${m.userId.split('@')[0]}` : m.user;
+        return `[${time}] ${m.user} (${tag}): ${m.message}`;
     }).join('\n');
     
     const prompt = `
@@ -143,13 +144,14 @@ async function generateConversationSummary(messages) {
     
     Genera un resumen casual y en chileno que incluya:
     - 📌 Los 2-3 temas principales que se discutieron
-    - 👥 Quién dijo qué (menciona a las personas por nombre)
+    - 👥 Quién dijo qué (DEBES etiquetar a los usuarios usando su etiqueta oficial que aparece entre paréntesis, ej: @56912345678)
     - 💡 Conclusiones, acuerdos o cosas pendientes (si hay)
     - 😂 Si hubo algo chistoso, menciónalo
     
     Reglas:
     - Usa lenguaje casual chileno ("wena", "cachai", "al tiro", etc.)
     - Máximo 250 palabras
+    - IMPORTANTE: Cuando hables de los usuarios, usa SIEMPRE su etiqueta numérica (@numero). No uses sus nombres de pila ni nicknames.
     - No inventes información que no está en la conversación
     - Si la conversación es muy corta o poco relevante, di "No hay mucho que resumir, puros saludos nomás"
     `;

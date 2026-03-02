@@ -7,6 +7,50 @@ const moment = require('moment-timezone');
 const ffmpeg = require('fluent-ffmpeg');
 const { MessageMedia } = require('../adapters/wwebjs-adapter');
 
+// --- Sistema de Caché de Medias ---
+const mediaCache = [];
+const MAX_CACHE_SIZE = 3;
+const MAX_VIDEO_DURATION = 5; // segundos
+
+// Función para agregar media al caché
+function addToMediaCache(messageId, media, mimetype, from) {
+    try {
+        // Solo guardar si es imagen, gif o video
+        if (!mimetype.includes('image') && !mimetype.includes('video')) return;
+        
+        // Evitar duplicados
+        const exists = mediaCache.find(item => item.messageId === messageId);
+        if (exists) return;
+        
+        mediaCache.unshift({ 
+            messageId, 
+            media, 
+            mimetype, 
+            from, 
+            timestamp: Date.now() 
+        });
+        
+        if (mediaCache.length > MAX_CACHE_SIZE) {
+            mediaCache.pop();
+        }
+        
+        console.log(`(MediaCache) -> Nueva media guardada: ${mimetype.split('/')[0]} de ${from.split('@')[0]}`);
+    } catch (err) {
+        console.error('(MediaCache) -> Error al guardar:', err);
+    }
+}
+
+// Validar duración de video usando ffprobe
+async function getVideoDuration(filePath) {
+    return new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(filePath, (err, metadata) => {
+            if (err) return reject(err);
+            const duration = metadata.format.duration;
+            resolve(duration);
+        });
+    });
+}
+
 // --- Lógica para Stickers ---
 async function handleSticker(client, message) {
     try {
@@ -14,21 +58,52 @@ async function handleSticker(client, message) {
         try { await message.react('⏳'); } catch (e) {}
 
         let mediaMessage = message;
+        let media = null;
+        let downloadSource = 'directo';
 
         // si no tiene media, revisa si responde a una
         if (!message.hasMedia && message.hasQuotedMsg) {
-            const quoted = await message.getQuotedMessage();
-            if (quoted.hasMedia) mediaMessage = quoted;
+            try {
+                const quoted = await message.getQuotedMessage();
+                if (quoted && quoted.hasMedia) {
+                    mediaMessage = quoted;
+                    downloadSource = 'quoted';
+                    console.log(`(Sticker) -> Usando mensaje citado de tipo: ${quoted.type}`);
+                }
+            } catch (quotedErr) {
+                console.error('(Sticker) -> Error al obtener mensaje citado:', quotedErr);
+            }
         }
 
-        if (!mediaMessage.hasMedia) {
-            return message.reply('❌ Responde a una imagen, gif o video con `!s`');
+        // Intentar descargar media
+        if (mediaMessage.hasMedia) {
+            try {
+                console.log(`(Sticker) -> Descargando desde ${downloadSource}...`);
+                media = await mediaMessage.downloadMedia();
+                
+                if (!media) {
+                    console.log('(Sticker) -> downloadMedia() retornó null, intentando con caché...');
+                }
+            } catch (downloadErr) {
+                console.error('(Sticker) -> Error en downloadMedia():', downloadErr.message);
+                console.log('(Sticker) -> Buscando en caché de medias recientes...');
+            }
         }
 
-        console.log(`(Sticker) -> Procesando tipo: ${mediaMessage.type}`);
+        // Si falla la descarga directa, buscar en caché
+        if (!media && mediaCache.length > 0) {
+            console.log(`(Sticker) -> Usando media del caché (${mediaCache.length} disponibles)`);
+            const cached = mediaCache[0]; // Más reciente
+            media = cached.media;
+            downloadSource = 'cache';
+        }
 
-        const media = await mediaMessage.downloadMedia();
-        if (!media) return message.reply('❌ No se pudo descargar la media');
+        // Si aún no hay media, error
+        if (!media) {
+            return message.reply('❌ Responde a una imagen, gif o video con `!s` o envía media directamente.');
+        }
+
+        console.log(`(Sticker) -> Media obtenida desde: ${downloadSource}, tipo: ${media.mimetype}`);
 
         const tempDir = path.join(__dirname, '..', '..', 'temp');
         if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
@@ -42,22 +117,42 @@ async function handleSticker(client, message) {
 
         const isAnimated = media.mimetype.includes('video') || media.mimetype.includes('gif');
 
+        // Validar duración de video
+        if (isAnimated && media.mimetype.includes('video')) {
+            try {
+                const duration = await getVideoDuration(tempFilePath);
+                console.log(`(Sticker) -> Video duración: ${duration.toFixed(2)} segundos`);
+                
+                if (duration > MAX_VIDEO_DURATION) {
+                    fs.unlinkSync(tempFilePath);
+                    return message.reply(`❌ El video es muy largo (${duration.toFixed(1)}s). Máximo ${MAX_VIDEO_DURATION} segundos para stickers.`);
+                }
+            } catch (probeErr) {
+                console.error('(Sticker) -> Error al verificar duración:', probeErr);
+                // Continuar de todos modos, ffmpeg cortará si es muy largo
+            }
+        }
+
         await new Promise((resolve, reject) => {
             const command = ffmpeg(tempFilePath)
                 .on('error', (err) => reject(err))
                 .on('end', () => resolve());
 
             if (isAnimated) {
-                // Configuración SIMPLIFICADA para animados
+                // Configuración optimizada para animados (evita superposición de frames)
                 command
                     .inputOptions(['-t 6'])  // Máximo 6 segundos
                     .outputOptions([
                         '-vcodec libwebp',
-                        '-vf scale=512:512:force_original_aspect_ratio=decrease,fps=10',  // Simplificado
+                        // CORRECCIÓN: Scale con pad para centrar y evitar artefactos
+                        '-vf scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000,fps=10,setsar=1',
                         '-loop 0',
                         '-preset default',
+                        '-lossless 0',  // No usar lossless (muy pesado)
+                        '-quality 75',  // Calidad balanceada
+                        '-compression_level 4',  // Compresión media
                         '-an',  // Sin audio
-                        '-vsync 0'
+                        '-metadata:s:v:0 alpha_mode="1"'  // Soporte de transparencia
                     ])
                     .toFormat('webp');
             } else {
@@ -65,7 +160,7 @@ async function handleSticker(client, message) {
                 command
                     .outputOptions([
                         '-vcodec libwebp',
-                        '-vf scale=512:512:force_original_aspect_ratio=decrease',
+                        '-vf scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
                         '-qscale 75'
                     ])
                     .toFormat('webp');
@@ -368,5 +463,6 @@ module.exports = {
     handleJoke,
     handleCountdown,
     handleBotMention,
-    handleOnce
+    handleOnce,
+    addToMediaCache
 };

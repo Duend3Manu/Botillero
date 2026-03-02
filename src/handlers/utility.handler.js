@@ -282,7 +282,20 @@ async function handleRecap(message) {
         
         await message.react('✅');
         
-        return `📝 *Resumen de los últimos ${messages.length} mensajes:*\n\n${summary}\n\n_Generado por Gemini 2.5 Flash_`;
+        // Extraer IDs únicos de usuarios mencionados en los mensajes
+        const uniqueUserIds = [...new Set(messages.map(m => m.userId).filter(Boolean))];
+        
+        const recapMessage = `📝 *Resumen de los últimos ${messages.length} mensajes:*\n\n${summary}\n\n_Generado por Gemini 2.5 Flash_`;
+        
+        // Enviar con menciones si hay usuarios
+        if (uniqueUserIds.length > 0) {
+            await message.reply(recapMessage, undefined, {
+                mentions: uniqueUserIds
+            });
+            return; // No retornar string, ya enviamos el mensaje
+        } else {
+            return recapMessage;
+        }
         
     } catch (error) {
         console.error('Error en handleRecap:', error);

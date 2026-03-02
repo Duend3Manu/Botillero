@@ -6,7 +6,7 @@
  * Implementa buffer circular FIFO (First In, First Out)
  */
 
-const MAX_MESSAGES_PER_GROUP = 20;
+const MAX_MESSAGES_PER_GROUP = 30;
 
 // Map<groupId, Array<MessageData>>
 const groupBuffers = new Map();

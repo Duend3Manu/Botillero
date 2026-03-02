@@ -42,22 +42,30 @@ async function handlePhoneSearch(client, message) {
 }
 
 async function handlePatenteSearch(message) {
-    // 1. Extracción robusta con Regex (igual que en otros handlers)
+    // 1. Extracción robusta con Regex
     const patenteInput = message.body.replace(/^([!/])(pat|patente)/gi, '').trim();
 
     if (!patenteInput) {
-        return message.reply("Debes ingresar una patente. Ejemplo: `!pat aabb12`");
+        return message.reply("🚗 Debes ingresar una patente.\n📌 Ejemplo: `!pat aabb12` o `!pat ABC123`");
     }
 
     // 2. Limpieza: Quitamos guiones, puntos y espacios, y pasamos a mayúsculas
     const cleanPatente = patenteInput.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 
+    // 3. Validación de longitud (patentes chilenas: 5-7 caracteres)
+    if (cleanPatente.length < 5 || cleanPatente.length > 7) {
+        return message.reply(
+            `⚠️ La patente *${cleanPatente}* tiene *${cleanPatente.length} caracteres*. Las patentes deben tener entre 5 y 7 caracteres.\n\n` +
+            `🚗 Vehículos: 6 caracteres. Ejemplo: \`ABC123\`\n` +
+            `🏍️ Motos: agrega un '0'. Ejemplo: \`AB0123\``
+        );
+    }
+
     try {
         await message.react('⏳');
-        
-        // Usamos el servicio Node.js (más rápido que Python para esto)
+
         const result = await apiService.getPatenteDataFormatted(cleanPatente);
-        
+
         if (result.error) {
             await message.reply(result.message);
             await message.react('❌');
