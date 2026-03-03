@@ -24,7 +24,9 @@ const services = {
     get network() { return require('./network.handler'); },
     get fap() { return require('./fap.handler'); },
     get group() { return require('./group.handler'); },
-    get ruleta() { return require('./ruleta.handler'); }
+    get ruleta() { return require('./ruleta.handler'); },
+    get poringa() { return require('./poringa.handler'); },
+    get ppost() { return require('./ppost.handler'); }
 };
 
 // --- Cooldowns para comandos específicos ---
@@ -200,6 +202,10 @@ const commandMap = {
     // FAP y grupos
     'fap': (client, msg) => services.fap.handleFapSearch(client, msg),
     'todos': (client, msg) => services.group.handleTagAll(client, msg),
+    
+    // Poringa / Scraper de imágenes
+    'poringa': (client, msg) => services.poringa.handlePoringaSearch(client, msg),
+    'ppost':   (client, msg) => services.ppost.handlePpostSearch(client, msg),
 
     // Ruleta y puntos
     'ruleta': (client, msg) => services.ruleta.handleRuleta(client, msg),
