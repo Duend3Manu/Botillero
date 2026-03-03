@@ -9,6 +9,7 @@ const puppeteer = require('puppeteer');
 const express   = require('express');
 const https     = require('https');
 const http      = require('http');
+require('dotenv').config();
 
 const app  = express();
 const PORT = 3000;
@@ -68,16 +69,18 @@ function bloquearRecursosInnecesarios(page) {
     });
 }
 
-/** Hace scroll completo para revelar imágenes con lazy-loading */
+/** Hace scroll completo para revelar imágenes con lazy-loading (máx 10 segundos) */
 async function scrollCompleto(page) {
     await page.evaluate(async () => {
         await new Promise((resolve) => {
-            let totalHeight = 0;
-            const distance = 200;
+            const MAX_MS  = 10000; // máximo 10 segundos
+            const start   = Date.now();
+            const distance = 300;
             const timer = setInterval(() => {
                 window.scrollBy(0, distance);
-                totalHeight += distance;
-                if (totalHeight >= document.body.scrollHeight - window.innerHeight) {
+                const scrolledEnough = window.scrollY + window.innerHeight >= document.body.scrollHeight - 100;
+                const timedOut       = Date.now() - start > MAX_MS;
+                if (scrolledEnough || timedOut) {
                     clearInterval(timer);
                     resolve();
                 }
@@ -85,6 +88,89 @@ async function scrollCompleto(page) {
         });
     });
 }
+
+/**
+ * Hace login en Poringa si hay credenciales en el .env.
+ * Usa page.evaluate para rellenar el formulario directamente (evita problemas de visibilidad).
+ */
+async function loginEnPoringa(page) {
+    const usuario  = process.env.PORINGA_USER;
+    const password = process.env.PORINGA_PASS;
+
+    if (!usuario || !password ||
+        usuario  === 'tu_usuario_aqui' ||
+        password === 'tu_contraseña_aqui') {
+        console.log('[Poringa] Sin credenciales configuradas, navegando sin login.');
+        return;
+    }
+
+    console.log(`[Poringa] Iniciando sesión como "${usuario}"...`);
+
+    // Forzar User-Agent de escritorio para evitar redirección a m.poringa.net
+    await page.setUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    );
+    await page.setViewport({ width: 1280, height: 800 });
+
+    try {
+        await page.goto('https://www.poringa.net/login', {
+            waitUntil: 'networkidle2',
+            timeout: 30000
+        });
+
+        // Rellenar Y enviar el form de login en un solo evaluate
+        // Usamos closest('form') para asegurarnos de enviar el formulario de login,
+        // NO el de búsqueda que también tiene un input[type="submit"]
+        const filled = await page.evaluate((nick, pass) => {
+            const nickEl = document.querySelector('input[name="nick"]');
+            const passEl = document.querySelector('input[name="pass"]');
+
+            if (!nickEl || !passEl) return 'no_fields';
+
+            // Forzar visibilidad por si estuviera oculto con CSS
+            nickEl.style.display = 'block';
+            passEl.style.display = 'block';
+
+            nickEl.value = nick;
+            passEl.value = pass;
+
+            // Disparar eventos para que el sitio reconozca los valores
+            ['input', 'change'].forEach(ev => {
+                nickEl.dispatchEvent(new Event(ev, { bubbles: true }));
+                passEl.dispatchEvent(new Event(ev, { bubbles: true }));
+            });
+
+            // Enviar el form que contiene el nick (NO el de búsqueda)
+            const form = nickEl.closest('form');
+            if (!form) return 'no_form';
+
+            form.submit();
+            return 'ok';
+        }, usuario, password);
+
+        if (filled !== 'ok') {
+            console.warn(`[Poringa] No se pudo rellenar el form: ${filled}. Continuando sin sesión.`);
+            return;
+        }
+
+
+        // Espera adicional por si el redirect es lento
+        await new Promise(r => setTimeout(r, 2000));
+
+        const urlActual = page.url();
+        if (!urlActual.includes('/login')) {
+            console.log(`[Poringa] ✅ Login exitoso. URL: ${urlActual}`);
+        } else {
+            console.warn(`[Poringa] ⚠️ Login pudo haber fallado. URL: ${urlActual}`);
+        }
+
+    } catch (err) {
+        console.warn(`[Poringa] Error durante el login: ${err.message}. Continuando sin sesión.`);
+    }
+}
+
+
+
 
 // ============================================================================
 // FUNCIÓN 1: Buscar posts reales en la página de resultados
@@ -96,6 +182,7 @@ async function buscarPostsEnWeb(terminoDeBusqueda, limite = 10) {
     const browser = await abrirBrowser();
     const page    = await browser.newPage();
     await bloquearRecursosInnecesarios(page);
+    // La búsqueda es contenido público — no requiere login
 
     try {
         const urlBusqueda = `https://www.poringa.net/search?q=${encodeURIComponent(terminoDeBusqueda)}`;
@@ -168,17 +255,69 @@ async function buscarPostsEnWeb(terminoDeBusqueda, limite = 10) {
 async function descargarImagenesDePost(postUrl) {
     console.log(`\n[+] Extrayendo imágenes del post: ${postUrl}`);
 
+    const usuario  = process.env.PORINGA_USER;
+    const password = process.env.PORINGA_PASS;
+    const tieneCredenciales = usuario && password &&
+        usuario !== 'tu_usuario_aqui' && password !== 'tu_contraseña_aqui';
+
     const browser = await abrirBrowser();
     const page    = await browser.newPage();
+
+    // Forzar User-Agent de escritorio en todas las navegaciones
+    await page.setUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    );
+    await page.setViewport({ width: 1280, height: 800 });
     await bloquearRecursosInnecesarios(page);
 
+    // Sin límite de timeout — Poringa puede tardar con los redirects
+    page.setDefaultNavigationTimeout(0);
+
     try {
-        await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        // PASO 1: Ir a /login y hacer login (siempre, si hay credenciales)
+        if (tieneCredenciales) {
+            console.log(`[Poringa] Paso 1: Ir a /login...`);
+            await page.goto('https://www.poringa.net/login', { waitUntil: 'domcontentloaded' });
+            console.log(`[Poringa] Paso 2: Rellenar y enviar formulario...`);
+
+            // Registrar waitForNavigation ANTES del click (patrón correcto Puppeteer)
+            const navPromise = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+
+            const loginResult = await page.evaluate((nick, pass) => {
+                const nickEl = document.querySelector('input[name="nick"]');
+                const passEl = document.querySelector('input[name="pass"]');
+                if (!nickEl || !passEl) return 'no_fields';
+                const form = nickEl.closest('form');
+                if (!form) return 'no_form';
+                nickEl.style.display = 'block';
+                passEl.style.display = 'block';
+                nickEl.value = nick;
+                passEl.value = pass;
+                ['input', 'change', 'keyup'].forEach(ev => {
+                    nickEl.dispatchEvent(new Event(ev, { bubbles: true }));
+                    passEl.dispatchEvent(new Event(ev, { bubbles: true }));
+                });
+                const btn = form.querySelector('input[type="submit"], button[type="submit"]');
+                if (!btn) return 'no_button';
+                btn.style.display = 'block';
+                btn.click();
+                return 'ok';
+            }, usuario, password);
+
+            // Esperar a que la página se redirija a la home tras el login
+            await navPromise;
+            console.log(`[Poringa] Login result=${loginResult}. URL actual: ${page.url()}`);
+        }
+
+        // PASO 3: Navegar al post con la sesión activa
+        console.log(`[Poringa] Paso 3: Navegando al post...`);
+        await page.goto(postUrl, { waitUntil: 'domcontentloaded' });
+        console.log(`[Poringa] ✅ URL del post: ${page.url()}`);
+
+
         await scrollCompleto(page);
 
         const items = await page.evaluate(() => {
-            // El contenido real del post en Poringa está en el contenedor principal
-            // Intentamos varios selectores comunes
             const contenedores = [
                 document.querySelector('.post-content'),
                 document.querySelector('.post_content'),
@@ -189,7 +328,6 @@ async function descargarImagenesDePost(postUrl) {
             ].filter(Boolean);
 
             const contenedor = contenedores[0] || document.body;
-
             const resultados = [];
             const urlsVistas = new Set();
 
@@ -198,22 +336,20 @@ async function descargarImagenesDePost(postUrl) {
                 if (!src || !src.startsWith('http')) return;
                 if (urlsVistas.has(src)) return;
 
-                // Filtros anti-ads y anti-basura
                 const esBasura = src.match(/(avatar|logo|banner|icon|flag|badge|sprite|default|blank|1x1|\.svg|ad\.|ads\.|doubleclick|facebook\.com|twitter\.com)/i);
                 const esBase64 = src.startsWith('data:');
                 if (esBasura || esBase64) return;
 
-                // Excluir imágenes de sidebar / related posts (urls muy cortas = miniaturas de nav)
                 if (src.includes('/thumb/') || src.includes('/small/')) return;
 
                 const esVideo = src.match(/\.(mp4|webm|ogg|mov)$/i) || el.tagName.toLowerCase() === 'video';
-
                 urlsVistas.add(src);
                 resultados.push({ url: src, tipo: esVideo ? 'video' : 'imagen' });
             });
 
             return resultados;
         });
+
 
         console.log(`[+] Imágenes en el post: ${items.length}`);
         return items;
