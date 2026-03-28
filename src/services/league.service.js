@@ -13,6 +13,12 @@ let lastUpcomingUpdate = 0;
 let summaryCache = null;
 let lastSummaryUpdate = 0;
 
+let cligaCache = null;
+let lastCligaUpdate = 0;
+
+let ligaCache = null;
+let lastLigaUpdate = 0;
+
 const LIVE_DATA_TTL = 60 * 1000; // 1 minuto (Tablas y partidos en vivo)
 const STATIC_DATA_TTL = 60 * 60 * 1000; // 1 hora (Próximos partidos)
 
@@ -83,8 +89,47 @@ async function getMatchDaySummary() {
     }
 }
 
+// --- NUEVAS FUNCIONES PARA COPA LIGA ---
+async function getCopaLigaGroups() {
+    if (cligaCache && (Date.now() - lastCligaUpdate < STATIC_DATA_TTL)) {
+        return cligaCache;
+    }
+    try {
+        console.log(`(Servicio Liga) -> Ejecutando cliga.py...`);
+        const result = await pythonService.executeScript('cliga.py');
+        if (result.code !== 0) throw new Error(result.stderr || 'Error al ejecutar cliga.py');
+        cligaCache = result.stdout;
+        lastCligaUpdate = Date.now();
+        return result.stdout;
+    } catch (error) {
+        console.error("Error en getCopaLigaGroups:", error.message);
+        if (cligaCache) return `${cligaCache}\n\n_(⚠️ Datos antiguos)_`;
+        return "No pude obtener los grupos de la Copa de la Liga.";
+    }
+}
+
+async function getCopaLigaMatches() {
+    if (ligaCache && (Date.now() - lastLigaUpdate < LIVE_DATA_TTL)) {
+        return ligaCache;
+    }
+    try {
+        console.log(`(Servicio Liga) -> Ejecutando liga.py...`);
+        const result = await pythonService.executeScript('liga.py');
+        if (result.code !== 0) throw new Error(result.stderr || 'Error al ejecutar liga.py');
+        ligaCache = result.stdout;
+        lastLigaUpdate = Date.now();
+        return result.stdout;
+    } catch (error) {
+        console.error("Error en getCopaLigaMatches:", error.message);
+        if (ligaCache) return `${ligaCache}\n\n_(⚠️ Datos antiguos)_`;
+        return "No pude obtener los partidos de la Copa de la Liga.";
+    }
+}
+
 module.exports = {
     getLeagueTable,
     getLeagueUpcomingMatches,
-    getMatchDaySummary // Exportamos la nueva función junto a las antiguas
+    getMatchDaySummary,
+    getCopaLigaGroups,
+    getCopaLigaMatches
 };

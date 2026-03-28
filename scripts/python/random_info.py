@@ -238,43 +238,6 @@ def get_geek_joke():
     except (requests.exceptions.RequestException, ValueError, KeyError, IndexError):
         return None
 
-def get_trago_del_dia():
-    """Obtiene una receta de cóctel aleatorio."""
-    try:
-        response = requests_get_with_retries(
-            "https://www.thecocktaildb.com/api/json/v1/1/random.php",
-            headers=DEFAULT_HEADERS,
-            timeout=REQUEST_TIMEOUT
-        )
-        trago = response.json().get('drinks', [None])[0]
-        
-        if not trago:
-            return None
-        
-        nombre = trago.get('strDrink', 'Cóctel')
-        ingredientes = []
-        
-        for i in range(1, 16):
-            ingrediente = trago.get(f'strIngredient{i}')
-            medida = trago.get(f'strMeasure{i}')
-            if ingrediente and ingrediente.strip():
-                medida_str = medida.strip() if medida else ''
-                ingredientes.append(f"- {medida_str} {ingrediente.strip()}")
-        
-        instrucciones = trago.get('strInstructionsES') or trago.get('strInstructions', 'Sin instrucciones')
-        thumb = trago.get('strDrinkThumb')
-        
-        if not thumb or not ingredientes:
-            return None
-        
-        return {
-            "type": "image",
-            "caption": f"🍸 *Trago del Día: {nombre}*\n\n*Ingredientes:*\n" + "\n".join(ingredientes) + f"\n\n*Instrucciones:*\n{instrucciones}",
-            "media_url": thumb
-        }
-    except (requests.exceptions.RequestException, ValueError, KeyError, IndexError):
-        return None
-
 def get_termino_geek():
     """Lee el archivo JSON local y devuelve un término geek al azar."""
     try:
@@ -298,47 +261,133 @@ def get_termino_geek():
     except (FileNotFoundError, json.JSONDecodeError, KeyError, IndexError):
         return None
 
-def get_xkcd_comic():
-    """Obtiene un cómic aleatorio de XKCD."""
+def get_cat_fact():
+    """Obtiene un dato curioso sobre gatos."""
     try:
-        response_latest = requests_get_with_retries(
-            "https://xkcd.com/info.0.json",
+        response = requests_get_with_retries(
+            "https://catfact.ninja/fact",
             headers=DEFAULT_HEADERS,
             timeout=REQUEST_TIMEOUT
         )
-        latest_num = response_latest.json().get('num')
-        
-        if not latest_num:
+        fact = response.json().get('fact')
+        if not fact:
             return None
-        
-        random_num = random.randint(1, latest_num)
-        response_comic = requests_get_with_retries(
-            f"https://xkcd.com/{random_num}/info.0.json",
-            headers=DEFAULT_HEADERS,
-            timeout=REQUEST_TIMEOUT
-        )
-        comic_data = response_comic.json()
-        
-        title = comic_data.get('safe_title', 'Cómic XKCD')
-        img = comic_data.get('img')
-        
-        if not img:
-            return None
-        
         return {
-            "type": "image",
-            "caption": f"✒️ *Cómic XKCD Aleatorio #{random_num}*\n*{title}*",
-            "media_url": img
+            "type": "text",
+            "caption": f"🐱 *Dato Gatuno*\n\n{fact}"
+        }
+    except (requests.exceptions.RequestException, ValueError, KeyError):
+        return None
+
+def get_numero_random():
+    """Obtiene un dato interesante sobre un número aleatorio."""
+    try:
+        num = random.randint(1, 9999)
+        response = requests_get_with_retries(
+            f"http://numbersapi.com/{num}",
+            headers=DEFAULT_HEADERS,
+            timeout=REQUEST_TIMEOUT
+        )
+        text = response.text.strip()
+        if not text:
+            return None
+        return {
+            "type": "text",
+            "caption": f"🔢 *Dato Numérico*\n\n{text}"
+        }
+    except (requests.exceptions.RequestException, ValueError):
+        return None
+
+def get_streaming_trending():
+    """Obtiene contenido trending de Netflix, Disney+ y HBO Max en Chile via JustWatch."""
+    try:
+        url = "https://apis.justwatch.com/graphql"
+        payload = {
+            "operationName": "GetPopularTitles",
+            "variables": {
+                "country": "CL",
+                "language": "es",
+                "first": 10,
+                "sortBy": "TRENDING",
+                "popularTitlesFilter": {
+                    "packages": ["nfx", "dnp", "hbm"],
+                    "objectTypes": ["MOVIE", "SHOW"]
+                }
+            },
+            "query": "query GetPopularTitles($country: Country!, $language: Language!, $first: Int!, $popularTitlesFilter: TitleFilter, $sortBy: PopularTitlesSorting!) { popularTitles(country: $country first: $first sortBy: $sortBy filter: $popularTitlesFilter) { edges { node { id objectType content(country: $country language: $language) { title shortDescription originalReleaseYear } offers(country: $country platform: WEB) { package { clearName } } } } } }"
+        }
+
+        resp = requests.post(url, json=payload, headers={
+            **DEFAULT_HEADERS,
+            'Content-Type': 'application/json',
+            'Referer': 'https://www.justwatch.com/'
+        }, timeout=15)
+
+        if resp.status_code != 200:
+            return None
+
+        data = resp.json()
+        edges = data.get('data', {}).get('popularTitles', {}).get('edges', [])
+        
+        if not edges:
+            return None
+
+        lines = []
+        for i, edge in enumerate(edges[:8]):
+            node = edge.get('node', {})
+            content = node.get('content', {})
+            title = content.get('title', '')
+            year = content.get('originalReleaseYear', '')
+            obj_type = node.get('objectType', '')
+            offers = node.get('offers', [])
+            
+            # Filtrar solo Netflix, Disney+, HBO Max
+            platform_names = {'Netflix', 'Disney Plus', 'HBO Max'}
+            platforms = list(set(
+                o.get('package', {}).get('clearName', '')
+                for o in offers
+                if o.get('package', {}).get('clearName', '') in platform_names
+            ))
+            
+            if not platforms:
+                continue
+
+            tipo = '🎬' if obj_type == 'MOVIE' else '📺'
+            plat_str = ', '.join(platforms)
+            lines.append(f"{tipo} *{title}* ({year}) — _{plat_str}_")
+
+        if not lines:
+            return None
+
+        caption = "🍿 *Trending en Streaming (Chile)*\n"
+        caption += "_Netflix · Disney+ · HBO Max_\n\n"
+        caption += "\n".join(lines)
+
+        return {
+            "type": "text",
+            "caption": caption
         }
     except (requests.exceptions.RequestException, ValueError, KeyError):
         return None
 
 
 if __name__ == "__main__":
+    # Si se pasa argumento "streaming", devolver solo streaming
+    if len(sys.argv) > 1 and sys.argv[1] == "streaming":
+        resultado = get_streaming_trending()
+        if resultado:
+            print(json.dumps(resultado, ensure_ascii=False))
+        else:
+            print(json.dumps({
+                "type": "text",
+                "caption": "❌ No pude obtener los estrenos de streaming en este momento."
+            }, ensure_ascii=False))
+        sys.exit(0)
+
     opciones = [
         get_efemeride, get_fun_fact, get_nasa_apod, get_quote_of_the_day,
-        get_cartelera_cine, get_geek_joke, get_trago_del_dia, get_termino_geek,
-        get_xkcd_comic
+        get_cartelera_cine, get_geek_joke, get_termino_geek,
+        get_cat_fact, get_numero_random, get_streaming_trending
     ]
     
     random.shuffle(opciones)

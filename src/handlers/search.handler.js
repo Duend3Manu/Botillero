@@ -3,8 +3,11 @@
 
 const axios = require('axios');
 const cheerio = require('cheerio');
-const GoogleIt = require('google-it');
 const { MessageMedia } = require('../adapters/wwebjs-adapter');
+const aiService = require('../services/ai.service');
+
+// User-Agent compartido para todas las peticiones
+const DEFAULT_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 async function handleWikiSearch(message) {
     // 1. Extracción robusta con Regex
@@ -16,6 +19,7 @@ async function handleWikiSearch(message) {
 
     try {
         await message.react('⏳');
+        const wikiHeaders = { 'User-Agent': 'Botillero/2.0 (WhatsApp Bot; contacto@botillero.cl)' };
         const response = await axios.get('https://es.wikipedia.org/w/api.php', {
             params: {
                 action: 'query',
@@ -25,6 +29,8 @@ async function handleWikiSearch(message) {
                 utf8: 1,
                 srlimit: 3,
             },
+            headers: wikiHeaders,
+            timeout: 10000
         });
 
         if (response.data.query.search.length === 0) {
@@ -50,9 +56,11 @@ async function handleWikiSearch(message) {
                     action: 'query',
                     prop: 'pageimages',
                     titles: firstTitle,
-                    pithumbsize: 600, // Tamaño de la imagen
+                    pithumbsize: 600,
                     format: 'json'
-                }
+                },
+                headers: wikiHeaders,
+                timeout: 10000
             });
 
             const pages = imageResponse.data.query.pages;
@@ -103,34 +111,26 @@ async function handleGoogleSearch(message) {
     const searchTerm = message.body.replace(/^([!/])g\s*/i, '').trim();
 
     if (!searchTerm) {
-        return "Escribe algo para buscar en Google. Ejemplo: `!g gatitos`";
+        return "Escribe algo para buscar. Ejemplo: `!g gatitos`";
     }
     
     try {
-        await message.react('⏳');
-        const results = await GoogleIt({ query: searchTerm });
+        await message.react('🔍');
         
-        // --- INICIO DE LA MEJORA ---
-        // 1. Verificamos si la respuesta es válida y tiene resultados.
-        if (!results || results.length === 0) {
-            console.log("La librería google-it no devolvió resultados para:", searchTerm);
-            await message.react('❌');
-            return `No se encontraron resultados en Google para *"${searchTerm}"*.`;
-        }
-        // --- FIN DE LA MEJORA ---
+        // Usar Gemini con Grounding para búsqueda de alta calidad en español
+        const searchResponse = await aiService.performAiSearch(searchTerm);
 
-        let response = `Resultados de Google para *"${searchTerm}"*:\n\n`;
-        results.slice(0, 4).forEach((result, index) => {
-            response += `*${index + 1}. ${result.title}*\n`;
-            response += `_${result.snippet}_\n`;
-            response += `${result.link}\n\n`;
-        });
+        if (!searchResponse || searchResponse.length < 10) {
+            await message.react('❌');
+            return `No pude encontrar resultados útiles para *"${searchTerm}"*.`;
+        }
+
         await message.react('✅');
-        return response;
+        return searchResponse;
     } catch (error) {
-        console.error("Error en búsqueda de Google:", error);
+        console.error("Error en búsqueda IA:", error.message);
         await message.react('❌');
-        return "Hubo un error al buscar en Google.";
+        return "Hubo un error al realizar la búsqueda. Intenta de nuevo.";
     }
 }
 

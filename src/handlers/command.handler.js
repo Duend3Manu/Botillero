@@ -141,6 +141,8 @@ const commandMap = {
     'partidos': () => services.league.getMatchDaySummary(),
     'tclasi': () => services.nationalTeam.getQualifiersTable(),
     'clasi': () => services.nationalTeam.getQualifiersMatches(),
+    'liga': () => services.league.getCopaLigaMatches(),
+    'cliga': () => services.league.getCopaLigaGroups(),
     
     // Servicios públicos
     'metro': () => services.metro.getMetroStatus(),
@@ -174,6 +176,7 @@ const commandMap = {
     'noticias': (_, msg) => services.search.handleNews(msg),
     'g': (_, msg) => services.search.handleGoogleSearch(msg),
     'oferta': (_, msg) => services.search.handleDealsSearch(msg),
+    'streaming': (_, msg) => services.utility.handleStreaming(msg),
     'pat': (_, msg) => services.personalSearch.handlePatenteSearch(msg),
     'audios': () => services.fun.handleAudioList(),
     
@@ -232,8 +235,10 @@ const validCommands = new Set([
 ]);
 
 // --- Regex Pre-compilada ---
+// IMPORTANTE: Usamos ^ para que solo matchee al INICIO del mensaje.
+// Esto evita falsos positivos con URLs que contengan palabras como /noticias, /tabla, etc.
 const commandRegex = new RegExp(
-    `([!/])(${[...validCommands].sort((a, b) => b.length - a.length).join('|')})\\b`, 
+    `^\\s*([!/])(${[...validCommands].sort((a, b) => b.length - a.length).join('|')})\\b`, 
     'i'
 );
 
@@ -241,17 +246,12 @@ const commandRegex = new RegExp(
 async function commandHandler(client, message) {
     const body = message.body.trim();
     
-    // Detectar comando usando regex optimizada
+    // Detectar comando usando regex optimizada (solo al inicio del mensaje)
     let command = null;
     const match = body.match(commandRegex);
 
     if (match) {
         command = match[2].toLowerCase();
-        
-        // Normalizar el mensaje si el comando no está al principio
-        if (match.index > 0) {
-            message.body = message.body.substring(match.index);
-        }
     }
 
     // Easter eggs (menciones al bot)

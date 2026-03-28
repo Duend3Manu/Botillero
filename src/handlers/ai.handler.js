@@ -85,11 +85,16 @@ async function handleSummary(message) {
 
     try {
         const textContent = await scrapeWeb(url);
+        let summary;
+        
+        // Si el scraper falla o es una app de JS muy pesada (TikTok, Insta, etc),
+        // pedimos a Gemini que busque en la web directamente usando Grounding.
         if (!textContent || textContent.length < 50) {
-            return "No pude leer el contenido de esa página. Puede que esté protegida o sea inaccesible.";
+            summary = await generateSummary(url, true);
+        } else {
+            summary = await generateSummary(textContent, false);
         }
-
-        const summary = await generateSummary(textContent);
+        
         return `📝 *Resumen IA:*\n\n${summary}`;
     } catch (error) {
         await message.react('❌'); // Indicar error visualmente

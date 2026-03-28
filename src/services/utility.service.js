@@ -22,6 +22,25 @@ async function getRandomInfo() {
     }
 }
 
+async function getStreamingTrending() {
+    try {
+        const result = await pythonService.executeScript('random_info.py', ['streaming']);
+
+        if (result.code !== 0) {
+            console.error("[ERROR utility.service] streaming falló:", result.stderr);
+            throw new Error(result.stderr || 'Error en script Python');
+        }
+
+        const data = result.json || JSON.parse(result.stdout);
+        return data.caption || '❌ No pude obtener la info de streaming.';
+
+    } catch (e) {
+        console.error("[ERROR utility.service] Error procesando streaming:", e);
+        return '❌ Error al obtener los estrenos de streaming. Intenta de nuevo.';
+    }
+}
+
 module.exports = {
-    getRandomInfo
+    getRandomInfo,
+    getStreamingTrending
 };

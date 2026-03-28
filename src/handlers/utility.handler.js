@@ -6,7 +6,7 @@ const cheerio = require('cheerio');
 const moment = require('moment-timezone');
 const config = require('../config');
 const { generateWhatsAppMessage } = require('../utils/secService');
-const { getRandomInfo } = require('../services/utility.service');
+const { getRandomInfo, getStreamingTrending } = require('../services/utility.service');
 const { getFeriadosResponse } = require('../services/ai.service');
 const { getBanksStatus } = require('../services/bank.service');
 
@@ -241,6 +241,19 @@ async function handleRandom() {
     }
 }
 
+async function handleStreaming(message) {
+    try {
+        await message.react('⏳');
+        const result = await getStreamingTrending();
+        await message.react('🍿');
+        return result;
+    } catch (error) {
+        console.error('Error al obtener streaming:', error);
+        await message.react('❌');
+        return '❌ No pude obtener los estrenos de streaming.';
+    }
+}
+
 async function handleBancos(message) {
     await message.react('⏳');
     return await getBanksStatus();
@@ -337,6 +350,7 @@ function handleMenu() {
 📱 \`!num [teléfono]\` → Info de número
 📝 \`!resumen [url]\` → Resumir web con IA
 🎲 \`!random\` → Dato curioso aleatorio
+🍿 \`!streaming\` → Trending en Netflix, Disney+, HBO
 🤝 \`!ayuda [duda]\` → Asistente IA
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -347,6 +361,8 @@ function handleMenu() {
 📆 \`!prox\` → Próximos partidos liga
 🇨🇱 \`!clasi\` → Partidos clasificatorias
 🏅 \`!tclasi\` → Tabla clasificatorias
+🏆 \`!cliga\` → Grupos Copa de la Liga
+📅 \`!liga\` → Partidos Copa de la Liga
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📡 *REDES Y DOMINIOS*
@@ -388,5 +404,6 @@ module.exports = {
     handleMenu,
     handleRandom,
     handleBancos,
-    handleRecap
+    handleRecap,
+    handleStreaming
 };
