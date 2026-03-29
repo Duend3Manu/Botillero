@@ -5,6 +5,8 @@ const { MessageMedia } = require('../adapters/wwebjs-adapter');
 const rateLimiter = require('../services/rate-limiter.service');
 const { handleReaction } = require('../services/messaging.service');
 
+const botConfig = require('../../config/bot.config');
+
 // --- Lazy Loading de Servicios ---
 // Los servicios solo se cargan cuando realmente se necesitan
 const services = {
@@ -162,12 +164,8 @@ const commandMap = {
     'bus': (client, msg) => services.utility.handleBus(msg, client),
     'sec': (_, msg) => services.utility.handleSec(msg),
     'menu': async (_, msg) => {
-        const { getMainMenuKeyboard } = require('./menu.handler');
-        await msg.reply('🤖 *Menú Principal — Botillero*\n\nSelecciona una categoría:', undefined, {
-            parse_mode: 'Markdown',
-            reply_markup: getMainMenuKeyboard()
-        });
-        return null; // Ya enviamos el mensaje directamente, no retornar texto
+        const { getMainMenu } = require('./menu.handler');
+        return getMainMenu();
     },
     'recap': (_, msg) => services.utility.handleRecap(msg),
     
@@ -278,8 +276,19 @@ async function commandHandler(client, message) {
         return message.reply(replyMessage);
     }
 
-    // Resolver alias
     const resolvedCommand = commandAliases[command] || command;
+
+    // Verificar si la característica está deshabilitada en la configuración
+    const isDisabled = botConfig.disabledFeatures && (
+        botConfig.disabledFeatures.includes(resolvedCommand) ||
+        botConfig.disabledFeatures.includes(command) ||
+        (command === 'audios' && botConfig.disabledFeatures.includes('sonidos'))
+    );
+
+    if (isDisabled) {
+        console.log(`(Handler) -> Comando bloqueado (deshabilitado): "${command}"`);
+        return;
+    }
 
     try {
         await handleReaction(message, (async () => {

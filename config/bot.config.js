@@ -1,27 +1,54 @@
 // config/bot.config.js
-"use strict";
+const fs = require('fs');
+const path = require('path');
 
 /**
- * Configuración del Bot de Telegram (Botillero v2.0)
- * Reemplaza la configuración de Puppeteer/WhatsApp Web.
+ * Configuración para el Botillero (WhatsApp Only)
+ * Selecciona el archivo JSON según BOT_ENV o presencia de botillero_xiaomi.json
  */
 
-module.exports = {
-    // Configuración de polling de Telegram
-    // Se usa en telegram.js al crear la instancia de TelegramBot
-    polling: {
-        interval: 300,       // ms entre peticiones al API de Telegram
-        autoStart: true,
-        params: {
-            timeout: 10      // long-polling timeout en segundos
-        }
-    },
+const botEnv = process.env.BOT_ENV || (fs.existsSync(path.join(__dirname, 'botillero_xiaomi.json')) ? 'xiaomi' : 'default');
+const configFileName = botEnv === 'xiaomi' ? 'botillero_xiaomi.json' : 'botillero.json';
+const configFilePath = path.join(__dirname, configFileName);
 
-    // Configuración de rate limiting
-    // globalCooldownMs: 0 = sin límite (máxima velocidad)
+let baseConfig = {
+    botName: "Botillero",
+    clientId: "botillero-session",
+    disabledFeatures: []
+};
+
+if (fs.existsSync(configFilePath)) {
+    try {
+        const fileContent = fs.readFileSync(configFilePath, 'utf8');
+        baseConfig = { ...baseConfig, ...JSON.parse(fileContent) };
+    } catch (e) {
+        console.error(`❌ Error cargando ${configFileName}:`, e.message);
+    }
+}
+
+module.exports = {
+    ...baseConfig,
+    authStrategy: {
+        clientId: baseConfig.clientId,
+        dataPath: './.wwebjs_auth'
+    },
+    puppeteer: {
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-extensions',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process',
+            '--disable-gpu'
+        ]
+    },
     rateLimiting: {
-        globalCooldownMs: 0,         // Sin límite — procesa comandos instantáneamente
-        cleanupIntervalMs: 300000,   // Limpiar cache cada 5 minutos
-        maxWarningsPerUser: 3        // Máximo de advertencias antes de ignorar silenciosamente
+        globalCooldownMs: 2000,
+        maxWarningsPerUser: 5,
+        cleanupIntervalMs: 300000
     }
 };

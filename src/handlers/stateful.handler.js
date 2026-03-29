@@ -3,7 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { MessageMedia } = require('../adapters/wwebjs-adapter'); // → TelegramMedia via adaptador
+const { MessageMedia } = require('whatsapp-web.js');
 
 const TICKET_FILE_PATH = path.join(__dirname, '..', '..', 'ticket.json');
 const CASOS_FILE_PATH = path.join(__dirname, '..', '..', 'casos.json');
@@ -178,7 +178,7 @@ async function handleCaso(message) {
                     await message.reply(response);
 
                     try {
-                        // Enviar el JSON completo como documento (compatible con Telegram)
+                        // Enviar el JSON completo como documento
                         const media = MessageMedia.fromFilePath(CASOS_FILE_PATH);
                         await message.reply(media);
                     } catch (e) {

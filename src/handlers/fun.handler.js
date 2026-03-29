@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
 const ffmpeg = require('fluent-ffmpeg');
-const { MessageMedia } = require('../adapters/wwebjs-adapter'); // → TelegramMedia via adaptador
+const { MessageMedia } = require('whatsapp-web.js');
 
 // --- Sistema de Caché de Medias ---
 const mediaCache = [];
@@ -185,31 +185,8 @@ async function handleSticker(client, message) {
         }
 
         const webpMedia = MessageMedia.fromFilePath(outputFilePath);
-        const { saveStickerSession, getStickerPackKeyboard } = require('./sticker-pack.handler');
-
-        // Enviar como sticker y capturar el mensaje enviado para obtener el file_id
-        let sentMsg = null;
-        if (typeof message.sendSticker === 'function') {
-            sentMsg = await message.sendSticker(webpMedia);
-        } else {
-            await message.reply(webpMedia);
-        }
-
-        // Si obtuvimos el file_id del sticker enviado, ofrecer añadir al pack
-        const fileId = sentMsg?.sticker?.file_id;
-        const userId = message.author || message.from;
-
-        if (fileId && userId) {
-            saveStickerSession(userId, fileId);
-            // Enviar mensaje de seguimiento con botón inline
-            await message.reply(
-                '📦 *¿Agregar este sticker al pack de Botillero?*',
-                undefined,
-                { reply_markup: getStickerPackKeyboard(userId) }
-            );
-        }
-
-        // Reacción de éxito
+        await message.reply(webpMedia, undefined, { sendMediaAsSticker: true });
+        
         try { await message.react('✅'); } catch (e) {}
 
         // Limpieza
@@ -298,7 +275,6 @@ async function handleSound(client, message, command) {
             // Ignoramos el error cosmético
         }
         const media = MessageMedia.fromFilePath(audioPath);
-        // message.reply detecta que es audio por el mimetype y llama sendAudio en Telegram
         await message.reply(media);
     } catch (error) {
         if (error.code === 'ENOENT') {
@@ -327,7 +303,6 @@ async function handleJoke(client, message) {
         const audioPath = path.join(folderPath, files[randomIndex]);
         
         const media = MessageMedia.fromFilePath(audioPath);
-        // message.reply detecta que es audio y llama sendAudio en Telegram
         await message.reply(media);
     } catch (error) {
         if (error.code === 'ENOENT') {
