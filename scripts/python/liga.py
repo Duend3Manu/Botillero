@@ -1,98 +1,107 @@
 import requests
 from bs4 import BeautifulSoup
+import json
+from datetime import datetime
 import sys
-import io
 
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
-def main():
+def scrapear_fecha_actual():
     url = "https://www.campeonatochileno.cl/ligas/copa-de-la-liga/"
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    
     try:
-        r = requests.get(url, headers=headers, timeout=15)
-        r.raise_for_status()
-    except Exception as e:
-        print("Error al obtener la liga:", e)
-        return
+        respuesta = requests.get(url, headers=headers)
+        if respuesta.status_code != 200:
+            print(json.dumps({"error": f"Error HTTP: {respuesta.status_code}"}))
+            return
+            
+        soup = BeautifulSoup(respuesta.text, 'html.parser')
+        
+        # 1. Buscar TODAS las fechas (los contenedores de los slides)
+        slides = soup.find_all('div', class_='anwp-fl-matchweek-slides__swiper-slide')
+        
+        if not slides:
+            print(json.dumps({"error": "No se encontraron las fechas del torneo en el HTML."}))
+            return
 
-    soup = BeautifulSoup(r.text, 'html.parser')
-
-    match_links = soup.find_all('a', href=lambda h: h and '/match/' in h)
-    
-    matches = []
-    seen = set()
-    
-    for a in match_links:
-        p = a.find_parent('div')
-        if not p: continue
-        p = p.find_parent('div')
-        if not p: continue
+        slide_activo = None
+        ahora = datetime.now()
         
-        strings = list(p.stripped_strings)
-        s_joined = " | ".join(strings)
-        
-        if len(strings) > 3 and s_joined not in seen:
-            seen.add(s_joined)
-            matches.append(strings)
-
-    if not matches:
-        print("No se encontraron partidos de la Copa de la Liga.")
-        return
-        
-    print("🏆 *Partidos Copa de la Liga* 🏆")
-    
-    current_date = ""
-    for m in matches:
-        
-        # Iterar a través de las strings del bloque general
-        # Encontramos 'hrs' y construimos el partido!
-        for i, val in enumerate(m):
-            if 'hrs' in val.lower() or ':' in val:
-                hora = val
+        # 2. Encontrar la fecha actual basada en el tiempo real
+        for slide in slides:
+            partidos_slide = slide.find_all('div', class_='anwp-fl-game')
+            if not partidos_slide:
+                continue
                 
-                # Fetch date
-                fecha = ""
-                # Miremos hasta 3 indices atrás para la fecha
-                for j in range(i-1, max(-1, i-4), -1):
-                    if any(mes in m[j].lower() for mes in ['marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']):
-                        fecha = m[j]
+            # Tomamos el último partido de esa fecha para saber cuándo termina la jornada
+            ultimo_partido_iso = partidos_slide[-1].get('data-fl-game-datetime', '')
+            if ultimo_partido_iso:
+                # Extraer solo la parte "YYYY-MM-DDTHH:MM:SS" (cortamos la zona horaria para evitar problemas)
+                fecha_str = ultimo_partido_iso[:19] 
+                try:
+                    ultimo_partido_dt = datetime.strptime(fecha_str, "%Y-%m-%dT%H:%M:%S")
+                    
+                    # Si el último partido de esta fecha es en el futuro (o hoy), ¡esta es la fecha activa!
+                    if ultimo_partido_dt >= ahora:
+                        slide_activo = slide
                         break
-                    elif len(m[j]) > 4 and '-' in m[j] and m[j][0].isdigit():
-                        fecha = m[j]
-                        break
-                        
-                if not fecha and i > 1:
-                    fecha = m[i-2] if m[i-1] in ['–', '-'] else m[i-1]
-                
-                # Fetch teams and scores
-                local = ""
-                visita = ""
-                marcador = "vs"
-                
-                # Si estamos al borde del arreglo (algo raro pasó)
-                if i+2 >= len(m):
+                except ValueError:
                     continue
-                    
-                local = m[i+1]
-                if m[i+2].isdigit() and i+4 < len(m) and m[i+3].isdigit():
-                    # Partido finalizado o en curso
-                    marcador = f"{m[i+2]}-{m[i+3]}"
-                    visita = m[i+4]
-                else:
-                    # Partido pendiente
-                    visita = m[i+2]
-                    
-                # Print
-                if fecha and fecha != current_date:
-                    print(f"\n📅 *{fecha}*")
-                    current_date = fecha
-                    
-                emoji = "⚽" if marcador != "vs" else "🏟️"
-                # Shorten long stadium names if they accidentaly leak into team name
-                if len(local) > 22: local = local[:20] + ".."
-                if len(visita) > 22: visita = visita[:20] + ".."
+        
+        # Si ya pasó todo el torneo, por defecto mostramos la última fecha registrada
+        if not slide_activo:
+            slide_activo = slides[-1]
+            
+        titulo_fecha = slide_activo.find('div', class_='competition__stage-title').text.strip()
+        partidos = slide_activo.find_all('div', class_='anwp-fl-game')
+        
+        datos_partidos = []
+        
+        # 3. Extraer los datos exactos de esa fecha ganadora
+        for partido in partidos:
+            try:
+                local = partido.find('div', class_='match-slim__team-home-title').text.strip()
+                visita = partido.find('div', class_='match-slim__team-away-title').text.strip()
                 
-                print(f"{emoji} {local} *{marcador}* {visita} _({hora})_")
+                goles_local = partido.find('span', class_='match-slim__scores-home').text.strip()
+                goles_visita = partido.find('span', class_='match-slim__scores-away').text.strip()
+                
+                if goles_local == "–" or goles_visita == "–":
+                    resultado = "Por jugar"
+                else:
+                    resultado = f"{goles_local} - {goles_visita}"
+                
+                fecha_iso = partido.get('data-fl-game-datetime', '')
+                if fecha_iso:
+                    fecha_str_limpia = fecha_iso[:19]
+                    fecha_obj = datetime.strptime(fecha_str_limpia, "%Y-%m-%dT%H:%M:%S")
+                    fecha_str = fecha_obj.strftime('%d/%m a las %H:%M')
+                else:
+                    fecha_str = "Por definir"
+                
+                datos_partidos.append({
+                    'fecha_hora': fecha_str,
+                    'local': local,
+                    'resultado': resultado,
+                    'visita': visita
+                })
+            except AttributeError:
+                continue
+                
+        # Empaquetar y enviar como JSON para Node.js
+        salida = {
+            "titulo": titulo_fecha,
+            "partidos": datos_partidos
+        }
+        
+        print(json.dumps(salida, ensure_ascii=False))
+        
+    except Exception as e:
+        print(json.dumps({"error": str(e)}))
 
 if __name__ == "__main__":
-    main()
+    # Necesario para no tener problemas de caracteres UTF-8 en Windows/PowerShell
+    sys.stdout.reconfigure(encoding='utf-8')
+    scrapear_fecha_actual()

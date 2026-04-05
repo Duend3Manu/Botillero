@@ -116,9 +116,28 @@ async function getCopaLigaMatches() {
         console.log(`(Servicio Liga) -> Ejecutando liga.py...`);
         const result = await pythonService.executeScript('liga.py');
         if (result.code !== 0) throw new Error(result.stderr || 'Error al ejecutar liga.py');
-        ligaCache = result.stdout;
+        
+        // El script liga.py ahora devuelve un JSON
+        const data = result.json;
+        if (!data || data.error) {
+            return `❌ Hubo un error en la cancha: ${data ? data.error : 'No se recibieron datos'}`;
+        }
+
+        // Armamos el mensaje para WhatsApp (Lógica sugerida por el usuario)
+        let mensajeRespuesta = `🏆 *Copa de la Liga - ${data.titulo}* 🏆\n\n`;
+
+        data.partidos.forEach(partido => {
+            let icono = partido.resultado === 'Por jugar' ? '⏳' : '✅';
+            // Si ya hay marcador, lo destacamos en negrita
+            let marcador = partido.resultado === 'Por jugar' ? 'Por jugar' : `*${partido.resultado}*`;
+            
+            mensajeRespuesta += `📅 ${partido.fecha_hora}\n`;
+            mensajeRespuesta += `${icono} ${partido.local} ${marcador} ${partido.visita}\n\n`;
+        });
+
+        ligaCache = mensajeRespuesta;
         lastLigaUpdate = Date.now();
-        return result.stdout;
+        return mensajeRespuesta;
     } catch (error) {
         console.error("Error en getCopaLigaMatches:", error.message);
         if (ligaCache) return `${ligaCache}\n\n_(⚠️ Datos antiguos)_`;

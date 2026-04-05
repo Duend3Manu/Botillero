@@ -101,11 +101,15 @@ def main():
     
     for g in grupos:
         print(f"\n*{g['name']}*")
-        print("`Pos Equipo         Pts`")
+        # Ajustamos los espacios del encabezado para que cuadre con los nombres más largos
+        print("`Pos Equipo                    Pts`")
         for i, t in enumerate(g['teams'][:4]):
-            nom = (t['club'][:13] + "..") if len(t['club']) > 15 else t['club']
+            # Aumentamos el límite a 24 letras, suficiente para casi todos los clubes chilenos
+            nom = (t['club'][:22] + "..") if len(t['club']) > 24 else t['club']
             emoji = "🟢" if i < 2 else "⚪"
-            print(f"{emoji} `{str(t['pos'])+'.':<3} {nom:<14} {str(t['pts']):>3}pts`")
+            
+            # Ampliamos el espaciado de 'nom' a 24 (nom:<24)
+            print(f"{emoji} `{str(t['pos'])+'.':<3} {nom:<24} {str(t['pts']):>3}pts`")
 
 if __name__ == "__main__":
     main()

@@ -138,13 +138,26 @@ const commandAliases = {
 // --- Command Map (Reemplaza el switch gigante) ---
 const commandMap = {
     // Liga/Deportes
-    'tabla': () => services.league.getLeagueTable(),
+    'tabla': async (client, msg) => {
+        await msg.reply('📊 Buscando la tabla de posiciones en la ANFP, dame un segundo...');
+        return services.league.getCopaLigaGroups();
+    },
+    'grupos': async (client, msg) => {
+        await msg.reply('📊 Buscando la tabla de posiciones en la ANFP, dame un segundo...');
+        return services.league.getCopaLigaGroups();
+    },
     'prox': () => services.league.getLeagueUpcomingMatches(),
     'partidos': () => services.league.getMatchDaySummary(),
     'tclasi': () => services.nationalTeam.getQualifiersTable(),
     'clasi': () => services.nationalTeam.getQualifiersMatches(),
-    'liga': () => services.league.getCopaLigaMatches(),
-    'cliga': () => services.league.getCopaLigaGroups(),
+    'liga': async (client, msg) => {
+        await msg.reply('⚽ Consultando el VAR de la Copa de la Liga, dame un segundito...');
+        return services.league.getCopaLigaMatches();
+    },
+    'cliga': async (client, msg) => {
+        await msg.reply('📊 Buscando la tabla de posiciones en la ANFP, dame un segundo...');
+        return services.league.getCopaLigaGroups();
+    },
     
     // Servicios públicos
     'metro': () => services.metro.getMetroStatus(),
