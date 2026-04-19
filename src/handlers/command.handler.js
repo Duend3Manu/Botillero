@@ -26,7 +26,6 @@ const services = {
     get network() { return require('./network.handler'); },
     get fap() { return require('./fap.handler'); },
     get group() { return require('./group.handler'); },
-    get ruleta() { return require('./ruleta.handler'); },
     get poringa() { return require('./poringa.handler'); },
     get ppost() { return require('./ppost.handler'); }
 };
@@ -220,11 +219,6 @@ const commandMap = {
     // Poringa / Scraper de imágenes
     'poringa': (client, msg) => services.poringa.handlePoringaSearch(client, msg),
     'ppost':   (client, msg) => services.ppost.handlePpostSearch(client, msg),
-
-    // Ruleta y puntos
-    'ruleta': (client, msg) => services.ruleta.handleRuleta(client, msg),
-    'puntos': (client, msg) => services.ruleta.handlePuntos(client, msg),
-    'ranking': (client, msg) => services.ruleta.handleRanking(client, msg),
     
     // ID del chat
     'id': (_, msg) => {
