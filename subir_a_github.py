@@ -85,11 +85,18 @@ if not commit_message:
     commit_message = "actualización sin descripción"
     print("⚠️ Usando mensaje por defecto.\n")
 
+# 📌 Detecta la rama actual para no forzar 'main'
+try:
+    branch_name = subprocess.check_output([GIT, "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
+except subprocess.CalledProcessError:
+    print("❌ No pude determinar la rama actual.")
+    exit()
+
 # ⛓️ Ejecuta comandos git (commit, pull --rebase, push)
 commands = [
     [GIT, "commit", "-m", commit_message],
-    [GIT, "pull", "origin", "main", "--rebase"],
-    [GIT, "push", "origin", "main"]
+    [GIT, "pull", "origin", branch_name, "--rebase"],
+    [GIT, "push", "origin", branch_name]
 ]
 
 for cmd in commands:
