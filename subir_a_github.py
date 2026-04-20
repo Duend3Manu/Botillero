@@ -28,9 +28,9 @@ if "origin" not in remotes:
 # 🧹 Limpia archivos ignorados que estén siendo trackeados
 def limpiar_archivos_ignorados():
     try:
-        ignorados = subprocess.check_output([GIT, "ls-files", "-i", "-o", "--exclude-standard"]).decode().splitlines()
+        ignorados = subprocess.check_output([GIT, "ls-files", "-i", "--exclude-standard"]).decode().splitlines()
         for archivo in ignorados:
-            subprocess.run([GIT, "rm", "--cached", archivo])
+            subprocess.run([GIT, "rm", "--cached", "--ignore-unmatch", archivo])
             print(f"🧹 Removido del índice: {archivo}")
     except subprocess.CalledProcessError:
         print("⚠️ No se pudo limpiar archivos ignorados.\n")
@@ -76,9 +76,6 @@ if conflicto_detectado():
     print("   - git reset --hard origin/main ← si querés reemplazar todo por lo remoto\n")
     exit()
 
-# (Eliminada la definición duplicada de limpiar_archivos_ignorados)
-
-
 # ✍️ Mensaje de commit
 commit_message = input("📝 Escribí el mensaje del commit: ").strip()
 if not commit_message:
@@ -92,12 +89,31 @@ except subprocess.CalledProcessError:
     print("❌ No pude determinar la rama actual.")
     exit()
 
-# ⛓️ Ejecuta comandos git (commit, pull --rebase, push)
+# 📌 Comprueba si la rama existe en el remoto antes de hacer pull
+remote_branch_exists = False
+try:
+    remote_output = subprocess.check_output([GIT, "ls-remote", "--heads", "origin", branch_name]).decode().strip()
+    remote_branch_exists = bool(remote_output)
+except subprocess.CalledProcessError:
+    remote_branch_exists = False
+
 commands = [
-    [GIT, "commit", "-m", commit_message],
-    [GIT, "pull", "origin", branch_name, "--rebase"],
-    [GIT, "push", "origin", branch_name]
+    [GIT, "commit", "-m", commit_message]
 ]
+
+if remote_branch_exists:
+    commands.append([GIT, "pull", "origin", branch_name, "--rebase"])
+else:
+    print(f"⚠️ La rama remota origin/{branch_name} no existe. Se omitirá el pull.")
+
+# Usa -u sólo si no hay configuración upstream
+try:
+    upstream = subprocess.check_output([GIT, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+    push_cmd = [GIT, "push", "origin", branch_name]
+except subprocess.CalledProcessError:
+    push_cmd = [GIT, "push", "-u", "origin", branch_name]
+
+commands.append(push_cmd)
 
 for cmd in commands:
     print(f"🔧 Ejecutando: {' '.join(cmd)}")
